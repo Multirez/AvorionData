@@ -15,9 +15,7 @@ function initialize()
 		local inventory = faction:getInventory()
 		chatMessage(classInfo(inventory:getItems()))
 		
-		--local tempClass = {"tableInfo" = tableInfo, "classInfo" = classInfo}
-		local s = "hello"
-		print(classInfo(s))
+		
 	end
 	
 	-- print("scripts:")
@@ -44,8 +42,10 @@ function tableInfo(tbl, prefix)
 	local result = prefix .. "---------------------"
     for k, v in pairsByKeys(tbl) do
 		if type(v) == "function" then
-			result = result .. prefix .. tostring(k) .. " function"
-			--result = result .. tableInfo(getArgs(v), prefix .. " | ")
+			result = result .. prefix .. tostring(k) .. " function "
+			if debug.getinfo(v)["nparams"] > 0 then
+				result = result .. tableInfo(getArgs(v), prefix .. " | ") --debug.getinfo(v)["nparams"] .. " params"
+			end
         else
 			result = result .. 
 				prefix .. tostring(k) .. " -> " .. tostring(v)
@@ -56,7 +56,7 @@ function tableInfo(tbl, prefix)
         end	
 		
 		if getmetatable(v) and (type(v)=="table" or type(v)=="userdata" or type(v)=="function" ) then
-			result = result .. tableInfo(getmetatable(v), prefix .. " | ")
+			result = result .. " " .. getmetatable(v).__avoriontype --tableInfo(getmetatable(v), prefix .. " | ")
 		end
     end
 	result = result .. prefix .. "---------------------"
