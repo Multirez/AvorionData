@@ -1,0 +1,169 @@
+<?xml version="1.0" encoding="utf-8"?>
+<CraftStyle createEngines="false">
+	<node name="root">
+		<specifics index="0"
+             minChildren="1"
+             maxChildren="15"
+             sizeFrom="(10.0, 10.0, 10.0)"
+             sizeTo="(45.0, 45.0, 45.0)"
+             type="4"/>
+		<attachRule index="1" minNumber="0" maxNumber="5" probability="1" noIntersection="true">
+            <direction from="(-10.0, -10.0, -10.0)" to="(10.0, 10.0, 10.0)"/>
+        </attachRule>
+		<attachRule index="2" minNumber="1" maxNumber="1" probability="1" noIntersection="true">
+            <direction from="(0.0, 100.0, 0.0)" to="(0.0, 100.0, 0.0)"/>
+        </attachRule>
+		<attachRule index="3" minNumber="1" maxNumber="1" probability="1" noIntersection="true">
+            <direction from="(0.0, -100.0, 0.0)" to="(0.0, -100.0, 0.0)"/>
+        </attachRule>
+		<attachRule index="4" minNumber="1" maxNumber="1" probability="1" noIntersection="true">
+            <direction from="(100.0, 0.0, 0.0)" to="(100.0, 0.0, 0.0)"/>
+        </attachRule>
+		<attachRule index="5" minNumber="1" maxNumber="1" probability="1" noIntersection="true">
+            <direction from="(-100.0, 0.0, 0.0)" to="(-100.0, 0.0, 0.0)"/>
+        </attachRule>
+		<attachRule index="6" minNumber="1" maxNumber="1" probability="1" noIntersection="true">
+            <direction from="(0.0, 0.0, 100.0)" to="(0.0, 0.0, 100.0)"/>
+        </attachRule>
+		<attachRule index="7" minNumber="1" maxNumber="1" probability="1" noIntersection="true">
+            <direction from="(0.0, 0.0, -100.0)" to="(0.0, 0.0, -100.0)"/>
+        </attachRule>
+	</node>
+	<node name="extension">
+		<specifics index="1"
+			minChildren="0"
+			maxChildren="6"
+			sizeFrom="(10.0, 10.0, 10.0)"
+			sizeTo="(20.0, 20.0, 20.0)"
+			parentSizeFactor="(0.0, 0.0, 0.0)"
+			type="4">
+		</specifics>
+
+		<attachRule index="2" minNumber="1" maxNumber="1" probability="1" noIntersection="true">
+            <direction from="(0.0, 100.0, 0.0)" to="(0.0, 100.0, 0.0)"/>
+        </attachRule>
+
+		<attachRule index="3" minNumber="1" maxNumber="1" probability="1" noIntersection="true">
+            <direction from="(0.0, -100.0, 0.0)" to="(0.0, -100.0, 0.0)"/>
+        </attachRule>
+
+		<attachRule index="4" minNumber="1" maxNumber="1" probability="1" noIntersection="true">
+            <direction from="(100.0, 0.0, 0.0)" to="(100.0, 0.0, 0.0)"/>
+        </attachRule>
+
+		<attachRule index="5" minNumber="1" maxNumber="1" probability="1" noIntersection="true">
+            <direction from="(-100.0, 0.0, 0.0)" to="(-100.0, 0.0, 0.0)"/>
+        </attachRule>
+
+		<attachRule index="6" minNumber="1" maxNumber="1" probability="1" noIntersection="true">
+            <direction from="(0.0, 0.0, 100.0)" to="(0.0, 0.0, 100.0)"/>
+        </attachRule>
+
+		<attachRule index="7" minNumber="1" maxNumber="1" probability="1" noIntersection="true">
+            <direction from="(0.0, 0.0, -100.0)" to="(0.0, 0.0, -100.0)"/>
+        </attachRule>
+	</node>
+
+	<node name="middle+y">
+		<specifics index="2"
+			minChildren="0"
+			maxChildren="1"
+			sizeFrom="(0.1f, 0.1f, 0.1f)"
+			sizeTo="(5.0, 1.0, 5.0)"
+			parentSizeFactor="(0.8f, 0.2f, 0.8f)"
+			maxRepetitions="3"
+			type="4">
+		</specifics>
+
+		<attachRule index="2" minNumber="1" maxNumber="1" probability="1" noIntersection="true">
+            <direction from="(0.0, 100.0, 0.0)" to="(0.0, 100.0, 0.0)"/>
+        </attachRule>
+	</node>
+
+	<node name="middle-y">
+		<specifics index="3"
+			minChildren="0"
+			maxChildren="1"
+			sizeFrom="(0.1f, 0.1f, 0.1f)"
+			sizeTo="(5.0, 1.0, 5.0)"
+			parentSizeFactor="(0.8f, 0.2f, 0.8f)"
+			maxRepetitions="3"
+			type="4">
+		</specifics>
+
+		<attachRule index="3" minNumber="1" maxNumber="1" probability="1" noIntersection="true">
+            <direction from="(0.0, -100.0, 0.0)" to="(0.0, -100.0, 0.0)"/>
+        </attachRule>
+
+	</node>
+
+	<node name="middle+x">
+		<specifics index="4"
+			minChildren="0"
+			maxChildren="1"
+			sizeFrom="(0.1f, 0.1f, 0.1f)"
+			sizeTo="(1.0, 5.0, 5.0)"
+			parentSizeFactor="(0.2f, 0.8f, 0.8f)"
+			maxRepetitions="3"
+			type="4">
+		</specifics>
+
+		<attachRule index="4" minNumber="1" maxNumber="1" probability="1" noIntersection="true">
+            <direction from="(100.0, 0.0, 0.0)" to="(100.0, 0.0, 0.0)"/>
+        </attachRule>
+	</node>
+
+	<node name="middle-x">
+		<specifics index="5"
+			minChildren="0"
+			maxChildren="1"
+			sizeFrom="(0.1f, 0.1f, 0.1f)"
+			sizeTo="(1.0, 5.0, 5.0)"
+			parentSizeFactor="(0.2f, 0.8f, 0.8f)"
+			maxRepetitions="3"
+			type="4">
+		</specifics>
+
+		<attachRule index="5" minNumber="1" maxNumber="1" probability="1" noIntersection="true">
+            <direction from="(-100.0, 0.0, 0.0)" to="(-100.0, 0.0, 0.0)"/>
+        </attachRule>
+	</node>
+
+
+	<node name="middle+z">
+		<specifics index="6"
+			minChildren="0"
+			maxChildren="1"
+			sizeFrom="(0.1f, 0.1f, 0.1f)"
+			sizeTo="(5.0, 5.0, 1.0)"
+			parentSizeFactor="(0.8f, 0.8f, 0.2f)"
+			maxRepetitions="3"
+			type="4">
+		</specifics>
+
+		<attachRule index="6" minNumber="1" maxNumber="1" probability="1" noIntersection="true">
+            <direction from="(0.0, 0.0, 100.0)" to="(0.0, 0.0, 100.0)"/>
+        </attachRule>
+	</node>
+
+	<node name="middle-z">
+		<specifics index="7"
+			minChildren="0"
+			maxChildren="1"
+			sizeFrom="(0.1f, 0.1f, 0.1f)"
+			sizeTo="(5.0, 5.0, 1.0)"
+			parentSizeFactor="(0.8f, 0.8f, 0.2f)"
+			maxRepetitions="3"
+			type="4">
+		</specifics>
+
+		<attachRule index="7" minNumber="1" maxNumber="1" probability="1" noIntersection="true">
+            <direction from="(0.0, 0.0, -100.0)" to="(0.0, 0.0, -100.0)"/>
+        </attachRule>
+	</node>
+
+
+
+
+</style>
+

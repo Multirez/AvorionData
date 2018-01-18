@@ -1,0 +1,4 @@
+0: CL (Korean)
+1: SC (Simpl. Chinese)
+2: TC (Tradit. Chinese)
+3: J (Japanese)

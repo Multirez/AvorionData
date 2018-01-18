@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<localization>
+  <tag>zh-hk</tag>
+  <displayName>Chinese (Traditional)</displayName>
+  <poFile>zh-hk.po</poFile>
+  <font fontType="0">
+    <file>sarasa-regular.ttc</file>
+    <face>2</face>
+  </font>
+  <font fontType="1">
+    <file>sarasa-regular.ttc</file>
+    <face>2</face>
+  </font>
+</localization>

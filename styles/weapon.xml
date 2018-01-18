@@ -1,0 +1,33 @@
+
+<style name="weapon" createEngines="0">
+	<node name="root">
+		<specifics index="0"
+			minChildren="1"
+			maxChildren="1"
+			sizeFrom="(0.05f, 0.05f, 0.1f)"
+			sizeTo="(0.15f, 0.15f, 0.3f)"
+			>
+		</specifics>
+		
+		<attachRule index="1" minNumber="1" maxNumber="1" probability="1" noIntersection="1">
+            <direction from="(0.0f, 0.0f, 1.0f)" to="(0.0f, 0.0f, 1.0f)"/>
+        </attachRule>
+	</node>
+	
+	<node name="w1">
+		<specifics index="1"
+			minChildren="0"
+			maxChildren="1"
+			parentSizeFactor="(0.0f, 0.0f, 0.0f)"
+			sizeFrom="(0.05f, 0.05f, 0.1f)"
+			sizeTo="(0.15f, 0.15f, 0.3f)"
+			maxRepetitions="2">
+		</specifics>
+		
+		<attachRule index="1" minNumber="1" maxNumber="1" probability="1" noIntersection="1">
+            <direction from="(0.0f, 0.0f, 1.0f)" to="(0.0f, 0.0f, 1.0f)"/>
+        </attachRule>
+	</node>
+	
+</style>
+
