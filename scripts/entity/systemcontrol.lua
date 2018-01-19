@@ -6,25 +6,16 @@ package.path = package.path .. ";data/scripts/lib/?.lua"
 require("debug")
 require("class")
 
+-- This function is always the very first function that is called in a script, and only once during
+-- the lifetime of the script. The function is always called on the server first, before client
+-- instances are available, so invoking client functions will never work. This function is both
+-- called when a script gets newly attached to an object, and when the object is loaded from the
+-- database during a load from disk operation. During a load from disk operation, no parameters
+-- are passed to the function. 
 function initialize()	
-	player = Player(Entity().factionIndex)
-	--chatMessage(player.name.." is a Player: "..tostring(getmetatable(player) == Player)..classInfo(getmetatable(Player)))
-	TestClass = class(function (a, name)
-					a.name = name
-				end)
-	function TestClass:speak()
-		return "My name is " .. self.name
+	if onServer() then
+		installFromInventory(3)
 	end
-	
-	classInstance = TestClass("InstanceName")
-	chatMessage(classInstance:speak())
-	chatMessage(classInfo(classInstance))
-	
-	PlayerClass = getmetatable(player)
-	function PlayerClass:classInfo()
-		return classInfo(self)
-	end
-	chatMessage(player:classInfo())
 	
 	
 	--[[ --Add ship system
@@ -36,15 +27,14 @@ function initialize()
 	
 	AddSystem(nil, seed, rarity)
 	
-	local scripts = Entity():getScripts()
-	chatMessage("scripts: "..tableInfo(scripts)) ]]
+	chatMessage("scripts: "..tableInfo(Entity():getScripts())) ]]
 
 	--[[ --Ship Plan
 	local plan = Entity():getMovePlan()
 	local planStats = plan:getStats()
-	Entity():setMovePlan(plan)
+	Entity():setMovePlan(plan) ]]
 	
-	chatMessage("plan stats: "..classInfo(planStats)) ]]
+	-- chatMessage("plan stats: "..classInfo(planStats))
 	
 	-- local faction = Faction(Entity().factionIndex)
 	-- local player = Player(faction.index)
@@ -63,6 +53,39 @@ function initialize()
 	-- printTable(Entity():getPlan())
 end
 
+-- Called when the script is about to be removed from the object, before the removal. 
+function onRemove()
+    -- if inventoryItem then
+		-- Player():getInventory():add(inventoryItem, inventoryItem.recent)
+		-- inventoryItem = nil
+	-- end
+end
+
+-- Called to secure values from the script. This function is called when the object is unloaded
+-- from the server. It's called at other times as well to refresh data, or when objects are copied
+-- or during regular saves. The table returned by this function will be passed to the restore()
+-- function when the object is loaded and read from disk. All values that are in the table must
+-- be numbers, strings or other tables. Values that aren't of the above types will be converted
+-- to nil and an error message will be printed.
+function secure()
+
+end
+
+-- Called to restore previously secured values for the script. Receives the values that were gathered
+-- from the last called to the secure() function. This function is called when the object is read
+-- from disk and restored, after initialize() was called.
+function restore(values)
+
+end
+
+-- Removes system upgrade from inventory and install it.
+function installFromInventory(inventoryIndex)
+	inventoryItem = Player():getInventory():find(inventoryIndex)
+	if inventoryItem then
+		chatMessage(inventoryItemInfo(inventoryItem))
+	end
+end
+
 function AddSystem(systemType, seed, rarity)
 	local entity = Entity()
 	
@@ -71,7 +94,7 @@ function AddSystem(systemType, seed, rarity)
 	end
 	
 	--TODO get system path fron systemType
-	local scriptPath = "data/scripts/systems/tradingoverview.lua"
+	local scriptPath = "energybooster"
 	
 	entity:addScript(scriptPath, seed, rarity)
 end
@@ -84,6 +107,25 @@ function classInfo(class)
 		result = result .. "\n----meta----" .. tableInfo(getmetatable(class))
 	end
 	return result .. "\n----end----"
+end
+
+function inventoryItemInfo(inventoryItem)
+	local info = "name: " .. inventoryItem.name
+	.. "\n| rarity: " .. inventoryItem.rarity.name	
+	.. "\n| favorite: " .. tostring(inventoryItem.favorite)
+	.. "\n| trash: " .. tostring(inventoryItem.trash)
+	.. "\n| recent: " .. tostring(inventoryItem.recent)
+	.. "\n| icon: " .. inventoryItem.icon
+	--.. "\n| iconColor: " .. tostring(inventoryItem.iconColor)
+	.. "\n| price: " .. tostring(inventoryItem.price)
+	.. "\n| itemType: " .. tostring(inventoryItem.itemType)
+	.. "\n| stackable: " .. tostring(inventoryItem.stackable)
+	if inventoryItem.itemType == InventoryItemType.SystemUpgrade then
+		info = info 
+		.. "\n| script: " .. inventoryItem.script
+		.. "\n| seed: " .. tostring(inventoryItem.seed)
+	end
+	return info
 end
 
 -- Returns string formatted values from table
