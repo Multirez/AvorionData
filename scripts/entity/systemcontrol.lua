@@ -4,22 +4,50 @@ package.path = package.path .. ";data/scripts/lib/?.lua"
 --require("stringutility")
 --require("faction")
 require("debug")
+require("class")
 
 function initialize()	
-	local faction = Faction(Entity().factionIndex)
-	local player = Player(faction.index)
-	-- chatMessage(tableInfo(faction))
-	
-	if onServer() then
-		chatMessage("Inventory from " .. faction.name .. ":")
-		local inventory = faction:getInventory()
-		chatMessage(classInfo(inventory:getItems()))
-		
-		
+	player = Player(Entity().factionIndex)
+	--chatMessage(player.name.." is a Player: "..tostring(getmetatable(player) == Player)..classInfo(getmetatable(Player)))
+	TestClass = class(function (a, name)
+					a.name = name
+				end)
+	function TestClass:speak()
+		return "My name is " .. self.name
 	end
 	
-	-- print("scripts:")
-	-- printTable(Entity():getScripts())
+	classInstance = TestClass("InstanceName")
+	chatMessage(classInstance:speak())
+	chatMessage(classInfo(classInstance))
+	--[[ --Add ship system
+	--TODO check ship processing power
+	--TODO find and get system from inventory
+	local random = Random(Server().seed)
+	local seed = random:createSeed()
+	local rarity = Rarity(RarityType.Exotic)
+	
+	AddSystem(nil, seed, rarity)
+	
+	local scripts = Entity():getScripts()
+	chatMessage("scripts: "..tableInfo(scripts)) ]]
+
+	--[[ --Ship Plan
+	local plan = Entity():getMovePlan()
+	local planStats = plan:getStats()
+	Entity():setMovePlan(plan)
+	
+	chatMessage("plan stats: "..classInfo(planStats)) ]]
+	
+	-- local faction = Faction(Entity().factionIndex)
+	-- local player = Player(faction.index)
+	-- chatMessage(tableInfo(faction))	
+	
+	-- if onServer() then
+		-- chatMessage("Inventory from " .. faction.name .. ":")
+		-- local inventory = faction:getInventory()
+		-- chatMessage(classInfo(inventory:getItems()))	
+	-- end
+	
 	
 	-- print("isShip: " .. tostring(Entity().isShip))
 	
@@ -27,19 +55,34 @@ function initialize()
 	-- printTable(Entity():getPlan())
 end
 
-
+function AddSystem(systemType, seed, rarity)
+	local entity = Entity()
+	
+	if not entity().isShip then
+		chatMessage("You must be in ship to use system control.")
+	end
+	
+	--TODO get system path fron systemType
+	local scriptPath = "data/scripts/systems/tradingoverview.lua"
+	
+	entity:addScript(scriptPath, seed, rarity)
+end
 
 -- Utilities
 function classInfo(class)
-	return (tableInfo(class) .. tableInfo(getmetatable(class)))
+	local result = "----class info----" .. tableInfo(class)
+	if getmetatable(class) then
+		result = result .. "\n----meta----" .. tableInfo(getmetatable(class))
+	end
+	return result .. "\n----end----"
 end
 
 function tableInfo(tbl, prefix)
     if prefix and string.len(prefix) > 100 then return "" end	
 	if type(tbl) ~= "table" then return "" end
 		
-    prefix = prefix or "\n"
-	local result = prefix .. "---------------------"
+    prefix = prefix or "\n| "
+	local result = "" --prefix .. "---------------------"
     for k, v in pairsByKeys(tbl) do
 		if type(v) == "function" then
 			result = result .. prefix .. tostring(k) .. " function "
@@ -51,15 +94,17 @@ function tableInfo(tbl, prefix)
 				prefix .. tostring(k) .. " -> " .. tostring(v)
 		end	
 		
-        if type(v) == "table" then
+        if type(v) == "table" and v ~= tbl then
             result = result .. tableInfo(v, prefix .. " | ")
         end	
 		
 		if getmetatable(v) and (type(v)=="table" or type(v)=="userdata" or type(v)=="function" ) then
-			result = result .. " " .. getmetatable(v).__avoriontype --tableInfo(getmetatable(v), prefix .. " | ")
+			if getmetatable(v).__avoriontype then
+				result = result .. " " .. getmetatable(v).__avoriontype --tableInfo(getmetatable(v), prefix .. " | ")
+			end
 		end
     end
-	result = result .. prefix .. "---------------------"
+	--result = result .. prefix .. "---------------------"
 	
 	return result
 end
