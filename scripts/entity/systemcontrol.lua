@@ -19,6 +19,14 @@ function initialize()
 	classInstance = TestClass("InstanceName")
 	chatMessage(classInstance:speak())
 	chatMessage(classInfo(classInstance))
+	
+	PlayerClass = getmetatable(player)
+	function PlayerClass:classInfo()
+		return classInfo(self)
+	end
+	chatMessage(player:classInfo())
+	
+	
 	--[[ --Add ship system
 	--TODO check ship processing power
 	--TODO find and get system from inventory
@@ -69,6 +77,7 @@ function AddSystem(systemType, seed, rarity)
 end
 
 -- Utilities
+-- Returns string class values and meta
 function classInfo(class)
 	local result = "----class info----" .. tableInfo(class)
 	if getmetatable(class) then
@@ -77,6 +86,7 @@ function classInfo(class)
 	return result .. "\n----end----"
 end
 
+-- Returns string formatted values from table
 function tableInfo(tbl, prefix)
     if prefix and string.len(prefix) > 100 then return "" end	
 	if type(tbl) ~= "table" then return "" end
@@ -109,6 +119,7 @@ function tableInfo(tbl, prefix)
 	return result
 end
 
+-- sorted by key enumeration
 function pairsByKeys(t, f)
       local a = {}
       for n in pairs(t) do table.insert(a, n) end
@@ -151,6 +162,7 @@ function chatMessage(message)
 	end	
 end
 
+-- Returns table with function (index = name) parameters
 function getArgs(fun)
 	local args = {}
 	local hook = debug.gethook()
