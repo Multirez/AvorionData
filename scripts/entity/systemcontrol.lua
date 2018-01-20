@@ -6,6 +6,8 @@ package.path = package.path .. ";data/scripts/lib/?.lua"
 require("debug")
 require("class")
 
+local activeSystems = {}
+
 -- This function is always the very first function that is called in a script, and only once during
 -- the lifetime of the script. The function is always called on the server first, before client
 -- instances are available, so invoking client functions will never work. This function is both
@@ -15,12 +17,12 @@ require("class")
 function initialize()	
 	if onServer() then
 		installFromInventory(3)
+		chatMessage(tableInfo(Entity():getScripts()))
 	end
 	
 	
 	--[[ --Add ship system
 	--TODO check ship processing power
-	--TODO find and get system from inventory
 	local random = Random(Server().seed)
 	local seed = random:createSeed()
 	local rarity = Rarity(RarityType.Exotic)
@@ -68,29 +70,62 @@ end
 -- be numbers, strings or other tables. Values that aren't of the above types will be converted
 -- to nil and an error message will be printed.
 function secure()
-
+	-- store activeSystems data
+	local data = {}
+	for i, system in pairs(activeSystems) do
+		local systemData = {}
+		systemData["script"] = system.script
+		systemData["rarity"] = system.rarity.value
+		systemData["seed"] = system.seed.value
+		data[i] = systemData
+	end
+	
+	return data
 end
 
 -- Called to restore previously secured values for the script. Receives the values that were gathered
 -- from the last called to the secure() function. This function is called when the object is read
 -- from disk and restored, after initialize() was called.
 function restore(values)
-
+	activeSystems = {}
+	
+	if type(values) ~= "table" then
+		return
+	end
+	
+	for i, systemData in pairs(values) do
+		activeSystems[i] =  SystemUpgradeTemplate(systemData["script"],
+			Rarity(systemData["rarity"]), Seed(systemData["seed"]))
+	end
 end
 
 -- Removes system upgrade from inventory and install it.
 function installFromInventory(inventoryIndex)
-	inventoryItem = Player():getInventory():find(inventoryIndex)
+	-- Check and take system from inventory
+	local inventory = Player():getInventory();
+	local inventoryItem = inventory:find(inventoryIndex)
 	if not inventoryItem or inventoryItem.itemType == InventoryItemType.SystemUpgrade then
 		chatMessage("Error: Can't to find SystemUpgrade in the inventory at index: ", inventoryIndex)
 		return
 	end
+		
+	local systemUpgrade = inventory:take(inventoryIndex)
+	chatMessage(inventoryItemInfo(systemUpgradeTemplate))
 	
-	chatMessage(inventoryItemInfo(inventoryItem))
-	
+	-- TODO: seek the right way to install ship system 
+	local installResult = Entity():addScript(systemUpgrade.script, 
+		systemUpgrade.seed, systemUpgrade.rarity)
+	if installResult ~= 0 then
+		chatMessage("Error: Can't to install system at current Entity()")
+		inventory:add(systemUpgrade, systemUpgrade.recent)
+		return
+	else
+		chatMessage(systemUpgrade.name, "was installed successfully.")
+		table.insert(activeSystems, systemUpgrade)
+	end	
 end
 
-function AddSystem(systemType, seed, rarity)
+--[[ function AddSystem(systemType, seed, rarity)
 	local entity = Entity()
 	
 	if not entity().isShip then
@@ -101,7 +136,7 @@ function AddSystem(systemType, seed, rarity)
 	local scriptPath = "energybooster"
 	
 	entity:addScript(scriptPath, seed, rarity)
-end
+end ]]
 
 -- Utilities
 -- Returns string class values and meta
