@@ -81,9 +81,13 @@ end
 -- Removes system upgrade from inventory and install it.
 function installFromInventory(inventoryIndex)
 	inventoryItem = Player():getInventory():find(inventoryIndex)
-	if inventoryItem then
-		chatMessage(inventoryItemInfo(inventoryItem))
+	if not inventoryItem or inventoryItem.itemType == InventoryItemType.SystemUpgrade then
+		chatMessage("Error: Can't to find SystemUpgrade in the inventory at index: ", inventoryIndex)
+		return
 	end
+	
+	chatMessage(inventoryItemInfo(inventoryItem))
+	
 end
 
 function AddSystem(systemType, seed, rarity)
@@ -177,9 +181,12 @@ function pairsByKeys(t, f)
     end
 
 local MaxMessageLength = 500
-function chatMessage(message)
-	local player = Player(Entity().factionIndex)
+function chatMessage(message, ...)
+	for i,v in ipairs(arg) do
+		message = message .. " " .. tostring(v)
+	end	
 	local length = #message
+	local player = Player(Entity().factionIndex)
 	
 	if length < MaxMessageLength then
 		player:sendChatMessage("", 0, message)
