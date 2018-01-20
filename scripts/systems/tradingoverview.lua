@@ -163,7 +163,19 @@ function gatherData()
 
     local sellable = {}
     local buyable = {}
-    local scripts = {"consumer.lua", "factory.lua", "tradingpost.lua"}
+    local scripts = {"/consumer.lua",
+    "/seller.lua",
+    "/turretfactoryseller.lua",
+    "/factory.lua",
+    "/highfactory.lua",
+    "/basefactory.lua",
+    "/midfactory.lua",
+    "/lowfactory.lua",
+    "/tradingpost.lua",
+    "/planetarytradingpost.lua",
+    "/casino.lua",
+    "/habitat.lua",
+    "/biotope.lua"}
 
     for _, station in pairs({Sector():getEntitiesByType(EntityType.Station)}) do
         for _, script in pairs(scripts) do
