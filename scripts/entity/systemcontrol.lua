@@ -1,12 +1,13 @@
 package.path = package.path .. ";data/scripts/lib/?.lua"
 
 --require("utility")
---require("stringutility")
+require("stringutility")
 --require("faction")
 require("debug")
-require("class")
+--require("class")
 
 local activeSystems = {}
+local usePlayerInventory = true
 
 -- This function is always the very first function that is called in a script, and only once during
 -- the lifetime of the script. The function is always called on the server first, before client
@@ -15,11 +16,9 @@ local activeSystems = {}
 -- database during a load from disk operation. During a load from disk operation, no parameters
 -- are passed to the function. 
 function initialize()	
-	if onServer() then
-		chatMessage("test", "chat", "message")
-	
-		installFromInventory(3)
-		chatMessage(tableInfo(Entity():getScripts()))
+	if onServer() then	
+		--installFromInventory(6)
+		--chatMessage(tableInfo(Entity():getScripts()))
 	end
 	
 	
@@ -74,14 +73,17 @@ end
 function secure()
 	-- store activeSystems data
 	local data = {}
+	local systems = {}
 	for i, system in pairs(activeSystems) do
 		local systemData = {}
 		systemData["script"] = system.script
 		systemData["rarity"] = system.rarity.value
 		systemData["seed"] = system.seed.value
-		data[i] = systemData
+		systems[i] = systemData
 	end
+	data["activeSystems"] = systems
 	
+	data["usePlayerInventory"] = usePlayerInventory
 	return data
 end
 
@@ -95,10 +97,96 @@ function restore(values)
 		return
 	end
 	
-	for i, systemData in pairs(values) do
+	for i, systemData in pairs(values["activeSystems"]) do
 		activeSystems[i] =  SystemUpgradeTemplate(systemData["script"],
 			Rarity(systemData["rarity"]), Seed(systemData["seed"]))
 	end
+	
+	usePlayerInventory = values["usePlayerInventory"] or true
+end
+
+
+-- if this function returns false, the script will not be listed in the interaction window on the client,
+-- even though its UI may be registered
+function interactionPossible(playerIndex, option)
+
+    local player = Player()
+    if Entity().index == player.craftIndex then
+        return true
+    end
+
+    return false
+end
+
+function getIcon(seed, rarity)
+    return "data/textures/icons/circuitry.png"
+end
+
+local systemIcons = {}
+local usePlayerInventoryCheckBox
+function initUI()
+    local size = vec2(800, 600)
+    local res = getResolution()
+
+    local menu = ScriptUI()
+    local mainWindow = menu:createWindow(Rect(res * 0.5 - size * 0.5, res * 0.5 + size * 0.5));
+    menu:registerWindow(mainWindow, "System control"%_t);
+
+    mainWindow.caption = "System control"%_t
+    mainWindow.showCloseButton = 1
+    mainWindow.moveable = 1
+
+	local window = mainWindow
+	local scale = size.y
+	local labelHeight = scale*0.06
+	local buttonWidth = scale*0.3
+	local pos = vec2(scale*0.01, scale*0.01)
+	
+	-- usePlayerInventoryCheckBox = window:createCheckBox(
+		-- Rect(pos.x, pos.y, buttonWidth, labelHeight),
+		-- "Use player inventory:"%t, "onUsePlayerInventory")
+	-- usePlayerInventoryCheckBox.checked = usePlayerInventory
+	-- pos.y = pos.y + labelHeight
+	
+	local currentLabel = window:createLabel(
+		Rect(pos.x, pos.y, buttonWidth, labelHeight),
+		"Current"%t, math.floor(labelHeight*0.5))
+	pos.y = pos.y + labelHeight
+	
+	local tempList = {1, 2, 3, 4}
+	print(tableInfo(tempList))
+	createUISystemList(window, pos, labelHeight, tempList)
+	--window:createButton(Rect(10, size.y - 40, 60, size.y - 10), "test", testFunc)
+	
+	-- icon lists
+	for i=0, 9 do 
+		systemIcons[i] = {}
+	end
+end
+
+function onShowWindow()
+    refreshUI()
+end
+
+function refreshUI()
+	
+end
+
+function createUISystemList(window, pos, size, systemList)
+	local picture 
+	for i, v in ipairs(systemList) do
+		window:createLabel(Rect(pos.x, pos.y, size, size),
+			"pic"..tostring(v), math.floor(size*0.5))
+		-- picture = window:createPicture(Rect(pos.x, pos.y, size, size), "")
+		-- picture.isIcon = true
+		-- picture.picture = "data/textures/icons/circuitry.png"
+		pos.x = pos.x + size
+	end
+end
+
+function onUsePlayerInventory(isUse)
+	chatMessage("Use player inventory: ", usePlayerInventoryCheckBox.checked, 
+		"Not implemented yet.")
 end
 
 -- Removes system upgrade from inventory and install it.
@@ -106,19 +194,24 @@ function installFromInventory(inventoryIndex)
 	-- Check and take system from inventory
 	local inventory = Player():getInventory();
 	local inventoryItem = inventory:find(inventoryIndex)
-	if not inventoryItem or inventoryItem.itemType == InventoryItemType.SystemUpgrade then
-		chatMessage("Error: Can't to find SystemUpgrade in the inventory at index: " .. tostring(inventoryIndex))
+	if not inventoryItem or inventoryItem.itemType ~= InventoryItemType.SystemUpgrade then
+		chatMessage("Error: Can't to find SystemUpgrade in the inventory at index: ", inventoryIndex)
+		if inventoryItem then
+			chatMessage(inventoryItem.name, " has InventoryItemType :", inventoryItem.itemType, 
+				" but must be: ", InventoryItemType.SystemUpgrade)
+		end
 		return
 	end
 		
 	local systemUpgrade = inventory:take(inventoryIndex)
-	chatMessage(inventoryItemInfo(systemUpgradeTemplate))
+	chatMessage(inventoryItemInfo(systemUpgrade))
 	
 	-- TODO: seek the right way to install ship system 
 	local installResult = Entity():addScript(systemUpgrade.script, 
 		systemUpgrade.seed, systemUpgrade.rarity)
 	if installResult ~= 0 then
-		chatMessage("Error: Can't to install system at current Entity()")
+		chatMessage("Error: Can't to install system at current Entity().",
+			"Error code: ", installResult)
 		inventory:add(systemUpgrade, systemUpgrade.recent)
 		return
 	else
@@ -139,6 +232,8 @@ end
 	
 	entity:addScript(scriptPath, seed, rarity)
 end ]]
+
+
 
 -- Utilities
 -- Returns string class values and meta
