@@ -16,6 +16,8 @@ local activeSystems = {}
 -- are passed to the function. 
 function initialize()	
 	if onServer() then
+		chatMessage("test", "chat", "message")
+	
 		installFromInventory(3)
 		chatMessage(tableInfo(Entity():getScripts()))
 	end
@@ -105,7 +107,7 @@ function installFromInventory(inventoryIndex)
 	local inventory = Player():getInventory();
 	local inventoryItem = inventory:find(inventoryIndex)
 	if not inventoryItem or inventoryItem.itemType == InventoryItemType.SystemUpgrade then
-		chatMessage("Error: Can't to find SystemUpgrade in the inventory at index: ", inventoryIndex)
+		chatMessage("Error: Can't to find SystemUpgrade in the inventory at index: " .. tostring(inventoryIndex))
 		return
 	end
 		
@@ -217,9 +219,11 @@ function pairsByKeys(t, f)
 
 local MaxMessageLength = 500
 function chatMessage(message, ...)
+	local arg = {...}
 	for i,v in ipairs(arg) do
 		message = message .. " " .. tostring(v)
-	end	
+	end
+	
 	local length = #message
 	local player = Player(Entity().factionIndex)
 	
