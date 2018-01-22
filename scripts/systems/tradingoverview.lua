@@ -416,8 +416,10 @@ function sortByAmountOnShipDes(a, b) return a.amountOnShip > b.amountOnShip end
 
 function routesByProfit(a, b)
     -- calculate max profit
-    local pa = (a.sellable.price - a.buyable.price) * a.buyable.stock
-    local pb = (b.sellable.price - b.buyable.price) * b.buyable.stock
+    local pa = (a.sellable.price - a.buyable.price) * 
+		math.min(a.buyable.stock, a.sellable.maxStock - a.sellable.stock)
+    local pb = (b.sellable.price - b.buyable.price) *
+		math.min(b.buyable.stock, b.sellable.maxStock - b.sellable.stock)
     return pa > pb
 end
 
@@ -575,7 +577,7 @@ function refreshRoutesUI()
         end
     end
 
-    table.sort(routes, routesByPriceMargin)
+    table.sort(routes, routesByProfit)
 
     local index = 0
 	
@@ -608,14 +610,8 @@ function refreshRoutesUI()
 					buying = math.floor(offer.maxStock - offer.stock)
 					routeAmountLabels[index][j].caption = buying
 					
-					-- Determine which Stock is bigger
-					local respectAmount = 0
-					if selling >= buying then
-						respectAmount = buying
-					end
-					if selling < buying then
-						respectAmount = selling
-					end
+					-- Determine route value
+					local respectAmount = math.min(selling, buying)
 					
 					-- Calculating Profit of Route
 					local profit = 0
@@ -804,13 +800,14 @@ function buildRoutesGui(window)
     local size = window.size
 
     window:createFrame(Rect(size))
-
-    local priceX = 10
-    local stationLabelX = 170
-    local coordLabelX = 80
-	local amountLabelX = 400
-	local profitLabelX = 150
-	local cargoLabelX = 180
+	
+	local amountLabelX = 10 --120
+    local priceX = 130 --70
+    local stationLabelX = 200 --240
+    local coordLabelX = 440 --70
+	
+	local profitLabelX = 150 --30	
+	local cargoLabelX = 180 
 
     -- footer
     window:createButton(Rect(10, size.y - 40, 60, size.y - 10), "<", previousPageFunc)
@@ -838,7 +835,7 @@ function buildRoutesGui(window)
 		if i == 1 then
 			-- header
 			window:createLabel(vec2(px + 10, 10), "Profit"%_t, 15)
-			window:createLabel(vec2(px + cargoLabelX, 10), "Max Cargo"%_t, 15)
+			window:createLabel(vec2(px + cargoLabelX, 10), "Total Cargo"%_t, 15)
 		end
 			
 		local pframe = window:createFrame(psplit.right)
@@ -902,8 +899,10 @@ function buildRoutesGui(window)
             local stationLabel = window:createLabel(vec2(x + stationLabelX, yText), "", 15)
             local coordLabel = window:createLabel(vec2(x + coordLabelX, yText), "", 15)
 			local amountLabel = window:createLabel(vec2(x + amountLabelX, yText), "", 15)
-
-            local button = window:createButton(ssplit.right, "", buttonCallback)
+			
+			local buttonPos = ssplit.right
+			buttonPos = Rect(buttonPos.topLeft - vec2(20, 0), buttonPos.bottomRight - vec2(20, 0))
+            local button = window:createButton(buttonPos, "", buttonCallback)
 
             button.icon = "data/textures/icons/look-at.png"
 
