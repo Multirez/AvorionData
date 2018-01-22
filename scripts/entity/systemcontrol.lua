@@ -147,7 +147,7 @@ function initUI()
 	local label, button
 	local hotButtonName	= "Tab"
 	local getTempList = function() r = {} for n = 1, 15 do table.insert(r, n) end return r end
-	chatMessage(tableInfo(getTempList()))
+	--chatMessage(tableInfo(getTempList()))
 		
 	label = window:createLabel(pos,	"Current"%t, math.floor(labelHeight*0.5))	
 	usePlayerInventoryCheckBox = window:createCheckBox(
@@ -230,9 +230,15 @@ function createBorder(uiContainer, posRect, borderWidth, borderColor)
 end
 
 ---- UI callbacks ----
-function onUsePlayerInventory()
-	chatMessage("Use player inventory: ", usePlayerInventoryCheckBox.checked, 
-		"Not implemented yet.")
+function onUsePlayerInventory()	
+	local useText
+	if usePlayerInventoryCheckBox.checked then
+		useText = "Will be used player inventory."%t
+	else
+		useText = "Will be used alliance inventory."%t
+	end
+	
+	chatMessage("SystemControl:", useText, "Not implemented yet.")
 end
 
 function onUseButton(index_in)
@@ -370,26 +376,23 @@ function pairsByKeys(t, f)
     end
 
 local MaxMessageLength = 500
+
 function chatMessage(message, ...)
 	local arg = {...}
 	for i,v in ipairs(arg) do
 		message = message .. " " .. tostring(v)
 	end
 	local length = #message
-	local player
-	if onServer() then
-		player = Player(Entity().factionIndex)
-	else
-		player = Player()
+	local sendMessage = function(msg)
+		if onServer() then
+			Player(Entity().factionIndex):sendChatMessage(Entity().name, 0, msg)
+		else
+			Player():sendChatMessage(msg)
+		end
 	end
 	
 	if length < MaxMessageLength then
-		if onServer() then 
-			player:sendChatMessage("", 0, message)
-		else			
-			print(message)
-			player:sendChatMessage(message)
-		end
+		sendMessage(message)
 		return
 	end
 	
@@ -402,22 +405,12 @@ function chatMessage(message, ...)
 		subMessage = subMessage .. message:sub(from, to - 1)
 		from = to
 		if #subMessage > (MaxMessageLength * 0.5) then
-			if onServer() then 
-				player:sendChatMessage("", 0, subMessage)
-			else			
-				print(subMessage)
-				player:sendChatMessage(subMessage)
-			end
+			sendMessage(subMessage)
 			subMessage = ""
 		end
 	end
 	if #subMessage > 0 then 
-		if onServer() then 
-			player:sendChatMessage("", 0, subMessage)
-		else			
-			print(subMessage)
-			player:sendChatMessage(subMessage)
-		end
+		sendMessage(subMessage)
 	end	
 end
 
