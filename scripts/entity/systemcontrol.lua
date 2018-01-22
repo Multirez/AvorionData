@@ -9,6 +9,7 @@ require("debug")
 local activeSystems = {}
 local usePlayerInventory = true
 
+---- API functions ----
 -- This function is always the very first function that is called in a script, and only once during
 -- the lifetime of the script. The function is always called on the server first, before client
 -- instances are available, so invoking client functions will never work. This function is both
@@ -125,7 +126,7 @@ end
 local systemIcons = {}
 local usePlayerInventoryCheckBox
 function initUI()
-    local size = vec2(800, 600)
+    local size = vec2(960, 600)
     local res = getResolution()
 
     local menu = ScriptUI()
@@ -137,25 +138,41 @@ function initUI()
     mainWindow.moveable = 1
 
 	local window = mainWindow
-	local scale = size.y
-	local labelHeight = scale*0.06
-	local buttonWidth = scale*0.3
-	local pos = vec2(scale*0.01, scale*0.01)
-	
-	-- usePlayerInventoryCheckBox = window:createCheckBox(
-		-- Rect(pos.x, pos.y, buttonWidth, labelHeight),
-		-- "Use player inventory:"%t, "onUsePlayerInventory")
-	-- usePlayerInventoryCheckBox.checked = usePlayerInventory
-	-- pos.y = pos.y + labelHeight
-	
-	local currentLabel = window:createLabel(
-		Rect(pos.x, pos.y, buttonWidth, labelHeight),
-		"Current"%t, math.floor(labelHeight*0.5))
+	local scale = 0.9*size.y
+	local labelHeight = 0.06*scale
+	local buttonWidth = 0.2*scale
+	local iconSize = 0.1*scale
+	local margin = 0.01*scale
+	local pos = vec2(4*margin, 2*margin)
+	local label, button
+	local hotButtonName	= "Tab"
+	local getTempList = function() r = {} for n = 1, 15 do table.insert(r, n) end return r end
+	chatMessage(tableInfo(getTempList()))
+		
+	label = window:createLabel(pos,	"Current"%t, math.floor(labelHeight*0.5))	
+	usePlayerInventoryCheckBox = window:createCheckBox(
+		Rect(pos.x + buttonWidth + margin, pos.y, pos.x + 3*buttonWidth, pos.y + labelHeight),
+		"Use player inventory:"%t, "onUsePlayerInventory")
+	usePlayerInventoryCheckBox.checked = usePlayerInventory
 	pos.y = pos.y + labelHeight
+		
+	createUISystemList(window, pos, iconSize, getTempList())
+	pos.y = pos.y + iconSize + 2*margin
 	
-	local tempList = {1, 2, 3, 4}
-	print(tableInfo(tempList))
-	createUISystemList(window, pos, labelHeight, tempList)
+	for i=1, 5 do
+		label = window:createLabel(pos + vec2(0, margin),
+			hotButtonName.." + "..tostring(i), math.floor(labelHeight*0.5))
+		button = window:createButton(
+			Rect(pos.x + buttonWidth + margin, pos.y, pos.x + 2*buttonWidth, pos.y + labelHeight),
+			"Use"%t, "onUseButton")
+		button = window:createButton(
+			Rect(pos.x + 2*buttonWidth + margin, pos.y, pos.x + 3*buttonWidth, pos.y + labelHeight),
+			"Update"%t, "onUpdateButton")		
+		pos.y = pos.y + labelHeight
+		
+		createUISystemList(window, pos, iconSize, getTempList())
+		pos.y = pos.y + iconSize + 2*margin
+	end
 	--window:createButton(Rect(10, size.y - 40, 60, size.y - 10), "test", testFunc)
 	
 	-- icon lists
@@ -172,23 +189,63 @@ function refreshUI()
 	
 end
 
-function createUISystemList(window, pos, size, systemList)
-	local picture 
-	for i, v in ipairs(systemList) do
-		window:createLabel(Rect(pos.x, pos.y, size, size),
-			"pic"..tostring(v), math.floor(size*0.5))
-		-- picture = window:createPicture(Rect(pos.x, pos.y, size, size), "")
-		-- picture.isIcon = true
-		-- picture.picture = "data/textures/icons/circuitry.png"
-		pos.x = pos.x + size
+local isTabPressed = false
+function onKeyboardEvent(key, pressed) 
+	if key == 9 then -- Tab key
+		isTabPressed = pressed
+	end
+	
+	if isTabPressed and key > 48 and key < 60 and pressed then
+		print("Tab +", key - 48, "was pressed.")
 	end
 end
 
-function onUsePlayerInventory(isUse)
+---- UI create ----
+function createUISystemList(window, posVector, size, systemList, padding, borderWidth)
+	padding = padding or 6
+	borderWidth = borderWidth or 2
+	local pos = vec2(posVector.x, posVector.y)
+	local picture, frame
+	local buttonSize = vec2(size - borderWidth, size - borderWidth)
+	local border = vec2(borderWidth, borderWidth)
+	for i, v in ipairs(systemList) do
+		createBorder(window, Rect(pos, pos + buttonSize + border), borderWidth - 1)
+		picture = window:createPicture(Rect(pos + border, pos + buttonSize), "")
+		picture.isIcon = true
+		picture.picture = "data/textures/icons/circuitry.png"
+		pos.x = pos.x + size + padding
+	end
+end
+
+function createBorder(uiContainer, posRect, borderWidth, borderColor)
+	borderColor = borderColor or ColorRGB(1, 1, 1)
+	
+	local border = vec2(borderWidth, borderWidth)
+	local borderFrame = uiContainer:createFrame(posRect)
+	borderFrame.backgroundColor = ColorRGB(1, 1, 1)
+	local backFrame = uiContainer:createFrame(Rect(posRect.topLeft + border, posRect.bottomRight - border))
+	backFrame.backgroundColor = ColorRGB(0.1, 0.1, 0.1)
+	
+	return borderFrame, backFrame
+end
+
+---- UI callbacks ----
+function onUsePlayerInventory()
 	chatMessage("Use player inventory: ", usePlayerInventoryCheckBox.checked, 
 		"Not implemented yet.")
 end
 
+function onUseButton(index_in)
+	chatMessage("Use button pressed, index: ", index_in, 
+		"Not implemented yet.")
+end
+
+function onUpdateButton(index_in)
+	chatMessage("Update button pressed, index: ", index_in, 
+		"Not implemented yet.")
+end
+
+---- Functions ----
 -- Removes system upgrade from inventory and install it.
 function installFromInventory(inventoryIndex)
 	-- Check and take system from inventory
@@ -235,7 +292,7 @@ end ]]
 
 
 
--- Utilities
+---- Utilities ----
 -- Returns string class values and meta
 function classInfo(class)
 	local result = "----class info----" .. tableInfo(class)
@@ -318,12 +375,21 @@ function chatMessage(message, ...)
 	for i,v in ipairs(arg) do
 		message = message .. " " .. tostring(v)
 	end
-	
 	local length = #message
-	local player = Player(Entity().factionIndex)
+	local player
+	if onServer() then
+		player = Player(Entity().factionIndex)
+	else
+		player = Player()
+	end
 	
 	if length < MaxMessageLength then
-		player:sendChatMessage("", 0, message)
+		if onServer() then 
+			player:sendChatMessage("", 0, message)
+		else			
+			print(message)
+			player:sendChatMessage(message)
+		end
 		return
 	end
 	
@@ -336,12 +402,22 @@ function chatMessage(message, ...)
 		subMessage = subMessage .. message:sub(from, to - 1)
 		from = to
 		if #subMessage > (MaxMessageLength * 0.5) then
-			player:sendChatMessage("", 0, subMessage)
+			if onServer() then 
+				player:sendChatMessage("", 0, subMessage)
+			else			
+				print(subMessage)
+				player:sendChatMessage(subMessage)
+			end
 			subMessage = ""
 		end
 	end
 	if #subMessage > 0 then 
-		player:sendChatMessage("", 0, subMessage)
+		if onServer() then 
+			player:sendChatMessage("", 0, subMessage)
+		else			
+			print(subMessage)
+			player:sendChatMessage(subMessage)
+		end
 	end	
 end
 
