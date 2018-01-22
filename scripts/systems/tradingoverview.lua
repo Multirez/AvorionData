@@ -393,8 +393,8 @@ function setData(sellable_received, buyable_received, routes_received)
     refreshUI()
 end
 
-function sortByNameAsc(a, b) return a.good.name < b.good.name end
-function sortByNameDes(a, b) return a.good.name > b.good.name end
+function sortByNameAsc(a, b) return a.good.displayPlural < b.good.displayPlural end
+function sortByNameDes(a, b) return a.good.displayPlural > b.good.displayPlural end
 
 function sortByStockAsc(a, b) return a.stock / a.maxStock < b.stock / b.maxStock end
 function sortByStockDes(a, b) return a.stock / a.maxStock > b.stock / b.maxStock end
