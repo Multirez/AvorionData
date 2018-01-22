@@ -125,6 +125,7 @@ end
 
 local systemIcons = {}
 local usePlayerInventoryCheckBox
+
 function initUI()
     local size = vec2(960, 600)
     local res = getResolution()
@@ -186,10 +187,12 @@ function onShowWindow()
 end
 
 function refreshUI()
-	
+	getSystems()
+	test()
 end
 
 local isTabPressed = false
+
 function onKeyboardEvent(key, pressed) 
 	if key == 9 then -- Tab key
 		isTabPressed = pressed
@@ -199,6 +202,7 @@ function onKeyboardEvent(key, pressed)
 		print("Tab +", key - 48, "was pressed.")
 	end
 end
+
 
 ---- UI create ----
 function createUISystemList(window, posVector, size, systemList, padding, borderWidth)
@@ -229,6 +233,7 @@ function createBorder(uiContainer, posRect, borderWidth, borderColor)
 	return borderFrame, backFrame
 end
 
+
 ---- UI callbacks ----
 function onUsePlayerInventory()	
 	local useText
@@ -250,6 +255,7 @@ function onUpdateButton(index_in)
 	chatMessage("Update button pressed, index: ", index_in, 
 		"Not implemented yet.")
 end
+
 
 ---- Functions ----
 -- Removes system upgrade from inventory and install it.
@@ -283,6 +289,33 @@ function installFromInventory(inventoryIndex)
 	end	
 end
 
+function getSystems()
+	local entity = Entity()
+	local scripts = entity:getScripts()
+	local systemPath = "data/scripts/systems/"
+	local seed, rarity
+	for i, s in pairs(scripts) do
+		if s:sub(0, #systemPath) == systemPath then
+			e, rarity = entity:invokeFunction(s, "getRarity")
+			e, seed = entity:invokeFunction(s, "getSeed")
+			print(i, ":", s, "rarity", rarity.value, "seed", seed.value)			
+		end
+	end
+end
+
+-- for testing purposes
+function test()
+	-- if onClient() then
+		-- invokeServerFunction("test")
+		-- return
+	-- end
+	local componentType = ComponentType.Scripts
+	local entity = Entity()
+	print(entity.name, "has", componentType, ":", entity:hasComponent(componentType))
+	if entity:hasComponent(componentType) then
+		chatMessage(classInfo(entity))
+	end
+end
 --[[ function AddSystem(systemType, seed, rarity)
 	local entity = Entity()
 	
@@ -396,6 +429,15 @@ function chatMessage(message, ...)
 		return
 	end
 	
+	if onClient() then
+		local mail = Mail()
+		mail.sender = "Big chat message"%_t
+		mail.header = "This message is to big to show it via chat."%_t
+		mail.text = message
+
+		sendMail(Player().index, mail)
+	end
+	
 	local from = 0
 	local to = 0
 	local subMessage = ""
@@ -412,6 +454,15 @@ function chatMessage(message, ...)
 	if #subMessage > 0 then 
 		sendMessage(subMessage)
 	end	
+end
+
+function sendMail(playerIndex, mail)
+	if onClient() then
+		invokeServerFunction("sendMail", playerIndex, mail)
+		return
+	end
+	
+	Player(playerIndex):addMail(mail)
 end
 
 -- Returns table with function (index = name) parameters
