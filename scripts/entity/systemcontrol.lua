@@ -7,6 +7,7 @@ require("debug")
 --require("class")
 
 local activeSystems = {}
+local systemTemplates = {}
 local usePlayerInventory = true
 local totalTemplates = 5
 local slotRequirements = {0, 51, 128, 320, 800, 2000, 5000, 12500, 19764, 
@@ -20,52 +21,22 @@ local slotRequirements = {0, 51, 128, 320, 800, 2000, 5000, 12500, 19764,
 -- database during a load from disk operation. During a load from disk operation, no parameters
 -- are passed to the function. 
 function initialize()
+	for i=1, totalTemplates do
+		systemTemplates[i] = {}
+	end
 	if onServer() then	
 		--installFromInventory(6)
 		--chatMessage(tableInfo(Entity():getScripts()))
+		
+		-- local random = Random(Server().seed)
+		-- local seed = random:createSeed()
+		-- local rarity = Rarity(RarityType.Exotic)
 	end
-	
-	
-	--[[ --Add ship system
-	--TODO check ship processing power
-	local random = Random(Server().seed)
-	local seed = random:createSeed()
-	local rarity = Rarity(RarityType.Exotic)
-	
-	AddSystem(nil, seed, rarity)
-	
-	chatMessage("scripts: "..tableInfo(Entity():getScripts())) ]]
-
-	--[[ --Ship Plan
-	local plan = Entity():getMovePlan()
-	local planStats = plan:getStats()
-	Entity():setMovePlan(plan) ]]
-	
-	-- chatMessage("plan stats: "..classInfo(planStats))
-	
-	-- local faction = Faction(Entity().factionIndex)
-	-- local player = Player(faction.index)
-	-- chatMessage(tableInfo(faction))	
-	
-	-- if onServer() then
-		-- chatMessage("Inventory from " .. faction.name .. ":")
-		-- local inventory = faction:getInventory()
-		-- chatMessage(classInfo(inventory:getItems()))	
-	-- end
-	
-	
-	-- print("isShip: " .. tostring(Entity().isShip))
-	
-	-- print("entity processing power:")
-	-- printTable(Entity():getPlan())
 end
 
 -- Called when the script is about to be removed from the object, before the removal. 
 function onRemove()
-    -- if inventoryItem then
-		-- Player():getInventory():add(inventoryItem, inventoryItem.recent)
-		-- inventoryItem = nil
-	-- end
+	onClearButton() -- need to clear current systems, that was be uncorect registered
 end
 
 -- Called to secure values from the script. This function is called when the object is unloaded
@@ -127,6 +98,7 @@ function getIcon()
 end
 
 local systemIcons = {}
+local buttonToLine = {}
 local usePlayerInventoryCheckBox
 
 function initUI()
@@ -173,10 +145,12 @@ function initUI()
 		button = window:createButton(
 			Rect(pos.x + buttonWidth + margin, pos.y, pos.x + 2*buttonWidth, pos.y + labelHeight),
 			"Use"%t, "onUseButton")
+		buttonToLine[button.index] = i
 		button = window:createButton(
 			Rect(pos.x + 2*buttonWidth + margin, pos.y, pos.x + 3*buttonWidth, pos.y + labelHeight),
 			"Update"%t, "onUpdateButton")		
 		pos.y = pos.y + labelHeight
+		buttonToLine[button.index] = i
 		
 		systemIcons[i] = createUISystemList(window, pos, iconSize, maxSystemCount)
 		pos.y = pos.y + iconSize + 2*margin
@@ -195,7 +169,7 @@ function refreshUI()
 	updateUISystemList(systemIcons[0], activeSystems, upgradeSlotCount)
 	
 	for i=1, totalTemplates do
-		updateUISystemList(systemIcons[i], {}, upgradeSlotCount)
+		updateUISystemList(systemIcons[i], systemTemplates[i], upgradeSlotCount)
 	end
 end
 
@@ -259,14 +233,15 @@ function onUsePlayerInventory()
 	chatMessage("SystemControl:", useText)
 end
 
-function onUseButton(index_in)
-	chatMessage("Use button pressed, index: ", index_in, 
-		"Not implemented yet.")
+function onUseButton(button)
+	local lineIndex = buttonToLine[button.index]	
+	chatMessage("Use button pressed, line index:  ", lineIndex, "Not implemented yet.")
 end
 
-function onUpdateButton(index_in)
-	chatMessage("Update button pressed, index: ", index_in)
-	
+function onUpdateButton(button)
+	local lineIndex = buttonToLine[button.index]	
+	chatMessage("Update button pressed, line index: ", lineIndex)
+	systemTemplates[lineIndex] = { table.unpack(activeSystems) } -- new table
 	refreshUI()
 end
 
