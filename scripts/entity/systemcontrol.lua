@@ -12,6 +12,8 @@ local usePlayerInventory = true
 local totalTemplates = 5
 local slotRequirements = {0, 51, 128, 320, 800, 2000, 5000, 12500, 19764, 
 	31250, 43065, 59348, 78125, 107554, 148371}
+local systemPath = "data/scripts/systems/"
+local dummyPath = "data/scripts/entity/dummy.lua"
 
 ---- API functions ----
 -- This function is always the very first function that is called in a script, and only once during
@@ -35,8 +37,8 @@ function initialize()
 end
 
 -- Called when the script is about to be removed from the object, before the removal. 
-function onRemove()
-	onClearButton() -- need to clear current systems, that was be uncorect registered
+function onRemove()	
+	toInventory(getFaction(), getSystems()) -- need to clear current systems, that was be uncorect registered
 end
 
 -- Called to secure values from the script. This function is called when the object is unloaded
@@ -158,8 +160,11 @@ function initUI()
 end
 
 function onShowWindow()
-	activeSystems = getSystems() --get current list
-	installSystems(activeSystems) --reinstall current
+	-- reinstall current systems to get activeList
+	-- TODO: get active list without reinstall
+	activeSystems = {}
+	local systemList = getSystems() --get current list
+	installSystems(systemList) --reinstall current
 	
     refreshUI()
 end
@@ -236,6 +241,9 @@ end
 function onUseButton(button)
 	local lineIndex = buttonToLine[button.index]	
 	chatMessage("Use button pressed, line index:  ", lineIndex, "Not implemented yet.")
+	applyTemplate(systemTemplates[lineIndex])
+		
+	refreshUI()
 end
 
 function onUpdateButton(button)
@@ -298,7 +306,7 @@ end
 
 ---- Functions ----
 -- Removes system upgrade from inventory and install it.
-function installFromInventory(inventoryIndex)
+function installFromInventory(inventoryIndex) -- client side
 	-- Check and take system from inventory
 	local inventory = Player():getInventory();
 	local inventoryItem = inventory:find(inventoryIndex)
@@ -330,21 +338,122 @@ end
 
 -- returns player or allience faction index based on usePlayerInventory value.
 function getFaction()	
-	if usePlayerInventory then 
-		if onServer() then
-			return callingPlayer.index
-		end
+	if not usePlayerInventory then 
+		return Entity().factionIndex
+	end
+	if onClient() then
 		return Player().index
 	end
-	
+	-- server call for player inventory
+	if callingPlayer then 
+		return callingPlayer.index
+	end		
 	return Entity().factionIndex
 end
 
+-- uninstall systems that are not in template and try to install missing from inventory
+function applyTemplate(templateList) -- client side
+	-- TODO: checks is template length < slot count, or use sub template
+	local installList
+	activeSystems, installList = checkSystemsByTemplate(templateList)
+	installList = takeFromInventory(installList)
+	installSystems(installList)
+end
+
+function checkSystemsByTemplate(templateList) -- client side
+	print("checkSystemsByTemplate", "Not implemented yet.")	
+	local entity = Entity()
+	local fillIndex, dummiesTotal = fillEmptyWithDummies(entity)	
+	local installedSystems = {}
+	local notInstalledList = {unpack(templateList)}
+	local uninstalledList = {}
+	local lastByPath = {}
+	local es, seed, er, rarity
+	local scripts = entity:getScripts()
+	for i, s in pairs(scripts) do
+		-- work only with scripts from systems folder
+		if s:sub(0, #systemPath) == systemPath then
+			if lastByPath[s] then --move up previous to invoke current
+				moveSystemUp(lastByPath[s])
+				dummiesTotal = dummiesTotal + 1
+			end
+			lastByPath[s] = nil			
+			es, rarity = entity:invokeFunction(s, "getRarity")			
+			er, seed = entity:invokeFunction(s, "getSeed")
+			if es == 0 and er == 0 then
+				-- check is use or uninstall
+				local systemUpgrade = SystemUpgradeTemplate(s, rarity, seed)
+				local isRemain, index = table.containe(notInstalledList, systemUpgrade, isSystemsEqual)
+				if isRemain then
+					table.remove(notInstalledList, index)
+					table.insert(installedSystems, i, systemUpgrade)
+					lastByPath[s] = systemUpgrade
+				else
+					unInstall(entity.index, s)
+					table.insert(uninstalledList, i, systemUpgrade)
+				end
+			else
+				chatMessage("Error! Can't get systemUpgrade values for ", s, ". I will to delete it.")
+				unInstall(entity.index, s) -- delete upgrade with errors
+			end	
+		end
+	end
+	-- remove dummies
+	for i=1, dummiesTotal do
+		unInstall(entity.index, dummyPath)
+	end
+	-- return uninstalled systems to faction inventory
+	toInventory(getFaction(), uninstalledList) 
+	
+	return installedSystems, notInstalledList
+end
+
+function fillEmptyWithDummies(entity)
+	local scripts = entity:getScripts()
+	local fillToIndex = 0
+	local countByPath = {}
+	for i, s in pairs(scripts) do -- prepare countByPath
+		if s:sub(0, #systemPath) == systemPath then
+			countByPath[s] = (countByPath[s] or 0) + 1
+			if countByPath[s] > 1 then
+				fillToIndex = i
+			end
+		end
+	end
+	
+	local totalDummies = 0
+	for i=1, fillToIndex do
+		if scripts[i] == nil then -- fill with dummies empty space
+			install(entity.index, dummyPath, 0, 0)
+			totalDummies = totalDummies + 1
+		end
+	end
+	
+	return fillToIndex, totalDummies
+end
+
+-- moves system up and replace it by dummy to invokeFunction on other
+function moveSystemUp(system) -- client side
+	entity = Entity()
+	-- add copy
+	install(entity.index, system.script, system.seed.int32, system.rarity)
+	-- remove
+	unInstall(entity.index, system.script)
+	-- and replace by dummy
+	install(entity.index, dummyPath, 0, 0)
+end
+
+function takeFromInventory(requestList) -- client side
+	print("takeFromInventory", "Not implemented yet. RequestList:", tableInfo(requestList))
+	
+	return {}
+end
+
 -- UNINSTALL all upgrades, returns table<int, SystemUpgradeTemplate>
+-- also remove dummies scripts
 function getSystems() -- client side
 	local entity = Entity()
 	local scripts = entity:getScripts()
-	local systemPath = "data/scripts/systems/"
 	local seed, rarity
 	local result = {}
 	for i, s in pairs(scripts) do
@@ -354,11 +463,13 @@ function getSystems() -- client side
 			if seed ~= nil and rarity ~= nil then
 				print(i, ":", s, "rarity", rarity.value, "seed", seed.value)
 				table.insert(result, SystemUpgradeTemplate(s, rarity, seed))
-				entity:removeScript(s)
-				invokeServerFunction("unInstall", entity.index, s)
+				unInstall(entity.index, s)
 			else
 				print("Error! Can't get systemUpgrade values.")
 			end			
+		end
+		if s == dummyPath then
+			unInstall(entity.index, s)
 		end
 	end
 	
@@ -366,23 +477,35 @@ function getSystems() -- client side
 end
 
 -- UNINSTALL an upgrade with the valid name
-function unInstall(entityIndex, script) -- server side
+function unInstall(entityIndex, script) 
+	if onClient() then
+		Entity(entityIndex):removeScript(script)
+		invokeServerFunction("unInstall", entityIndex, script)
+		return
+	end
+	
 	Entity(entityIndex):removeScript(script)
 end
 
 function installSystems(systemList) -- client side
 	local entity = Entity()
 	for i, st in pairs(systemList) do
-		entity:addScript(st.script, st.seed.int32, st.rarity)
-		invokeServerFunction("install", entity.index, st.script, st.seed.int32, st.rarity)
+		table.insert(activeSystems, st) -- add to active list
+		install(entity.index, st.script, st.seed.int32, st.rarity)
 	end
 end
 
-function install(entityIndex, script, seed, rarity) -- server side
-	Entity(entityIndex):addScript(script, seed, rarity)
+function install(entityIndex, script, seed_int32, rarity)
+	if onClient() then
+		Entity(entityIndex):addScript(script, seed_int32, rarity)
+		invokeServerFunction("install", entityIndex, script, seed_int32, rarity)		
+		return
+	end
+	
+	Entity(entityIndex):addScript(script, seed_int32, rarity)
 end
 
-function toInventory(factionIndex, systemList) -- server side
+function toInventory(factionIndex, systemList)
 	if onClient() then
 		invokeServerFunction("toInventory", factionIndex, systemList)
 		return
@@ -405,12 +528,27 @@ end
 function processPowerToUpgradeCount(processingPower)
 	print("process power:", processingPower)
 	for i, requiredPP in ipairs(slotRequirements) do
-		if requiredPP >= processingPower then
+		if requiredPP > processingPower then
 			return (i - 1)
 		end
 	end
 	
 	return #slotRequirements
+end
+
+function isSystemsEqual(systemA, systemB)
+	return systemA.script == systemB.script and
+		systemA.seed == systemB.seed and
+		systemA.rarity == systemB.rarity	
+end
+
+function table.containe(tb, value, equalityFunc)
+	for i, v in pairs(tb) do
+		if equalityFunc(v, value) then
+			return true, i
+		end
+	end
+	return false
 end
 
 -- for testing purposes
@@ -426,19 +564,6 @@ function test()
 	if entity:hasComponent(componentType) then		
 	end ]]
 end
---[[ function AddSystem(systemType, seed, rarity)
-	local entity = Entity()
-	
-	if not entity().isShip then
-		chatMessage("You must be in ship to use system control.")
-	end
-	
-	--TODO get system path fron systemType
-	local scriptPath = "energybooster"
-	
-	entity:addScript(scriptPath, seed, rarity)
-end ]]
-
 
 
 ---- Utilities ----
@@ -505,18 +630,20 @@ end
 
 -- sorted by key enumeration
 function pairsByKeys(t, f)
-      local a = {}
-      for n in pairs(t) do table.insert(a, n) end
-      table.sort(a, f)
-      local i = 0      -- iterator variable
-      local iter = function ()   -- iterator function
-        i = i + 1
-        if a[i] == nil then return nil
-        else return a[i], t[a[i]]
-        end
-      end
-      return iter
-    end
+	local a = {}
+	for n in pairs(t) do table.insert(a, n) end
+	table.sort(a, f)
+	local i = 0      -- iterator variable
+	local iter = function ()   -- iterator function
+		i = i + 1
+		if a[i] == nil then 
+			return nil
+		else 
+			return a[i], t[a[i]]
+		end
+	end
+	return iter
+end
 
 local MaxMessageLength = 500
 
