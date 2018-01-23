@@ -152,9 +152,12 @@ function initUI()
 	--local getTempList = function() r = {} for n = 1, 15 do table.insert(r, n) end return r end
 	--chatMessage(tableInfo(getTempList()))
 		
-	label = window:createLabel(pos,	"Current"%t, math.floor(labelHeight*0.5))	
+	label = window:createLabel(pos,	"Current"%t, math.floor(labelHeight*0.5))
+	button = window:createButton(
+		Rect(pos.x + buttonWidth + margin, pos.y, pos.x + 2*buttonWidth, pos.y + labelHeight),
+		"Clear"%t, "onClearButton")
 	usePlayerInventoryCheckBox = window:createCheckBox(
-		Rect(pos.x + buttonWidth + margin, pos.y, pos.x + 3*buttonWidth, pos.y + labelHeight),
+		Rect(pos.x + 2*buttonWidth + margin, pos.y, pos.x + 4*buttonWidth, pos.y + labelHeight),
 		"Use player inventory:"%t, "onUsePlayerInventory")
 	usePlayerInventoryCheckBox.checked = usePlayerInventory
 	pos.y = pos.y + labelHeight
@@ -250,7 +253,7 @@ function onUsePlayerInventory()
 		useText = "Will be used alliance inventory."%t
 	end
 	
-	chatMessage("SystemControl:", useText, "Not implemented yet.")
+	chatMessage("SystemControl:", useText)
 end
 
 function onUseButton(index_in)
@@ -263,6 +266,11 @@ function onUpdateButton(index_in)
 		"Not implemented yet.")
 end
 
+function onClearButton()
+	toInventory(getFaction(), getSystems())
+	activeSystems = {}
+	refreshUI()
+end
 
 ---- UI update ----
 function updateUISystemList(iconList, systemList, availableTotal)
@@ -341,6 +349,15 @@ function installFromInventory(inventoryIndex)
 	end	
 end
 
+-- returns player or allience faction index based on usePlayerInventory value.
+function getFaction()
+	if usePlayerInventory then 
+		return Player().index
+	end
+	
+	return Entity().factionIndex
+end
+
 function getSystems()
 	local entity = Entity()
 	local scripts = entity:getScripts()
@@ -377,8 +394,20 @@ function installSystems(systemList)
 	end
 end
 
-function install(entityIndex, script, seed, rarity)
+function install(entityIndex, script, seed, rarity) -- server side
 	Entity(entityIndex):addScript(script, seed, rarity)
+end
+
+function toInventory(factionIndex, systemList) -- server side
+	if onClient() then
+		invokeServerFunction("toInventory", factionIndex, systemList)
+		return
+	end
+
+	inventory = Faction(factionIndex):getInventory()
+	for i, v in pairs(systemList) do
+		inventory:add(v, true)
+	end
 end
 
 -- for testing purposes
