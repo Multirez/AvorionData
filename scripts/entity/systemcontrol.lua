@@ -51,16 +51,30 @@ function secure()
 	-- store activeSystems data
 	local data = {}
 	local systems = {}
+	local systemData = {}
 	for i, system in pairs(activeSystems) do
-		local systemData = {}
+		systemData = {}
 		systemData["script"] = system.script
 		systemData["rarity"] = system.rarity.value
 		systemData["seed"] = system.seed.value
 		systems[i] = systemData
 	end
-	data["activeSystems"] = systems
-	
+	data["activeSystems"] = systems	
+	-- store templates data
+	for t=1, totalTemplates do
+		systems = {}
+		for i, system in pairs(systemTemplates[t]) do
+			systemData = {}
+			systemData["script"] = system.script
+			systemData["rarity"] = system.rarity.value
+			systemData["seed"] = system.seed.value
+			systems[i] = systemData
+		end
+		data[tostring(t)] = systems
+	end
+	-- settings
 	data["usePlayerInventory"] = usePlayerInventory
+	
 	return data
 end
 
@@ -73,12 +87,19 @@ function restore(values)
 	if type(values) ~= "table" then
 		return
 	end
-	
+	-- activeSystems data
 	for i, systemData in pairs(values["activeSystems"]) do
 		activeSystems[i] =  SystemUpgradeTemplate(systemData["script"],
 			Rarity(systemData["rarity"]), Seed(systemData["seed"]))
 	end
-	
+	-- restore templates data
+	for t=1, totalTemplates do
+		for i, systemData in pairs(values[tostring(t)]) do
+			systemTemplates[t][i] =  SystemUpgradeTemplate(systemData["script"],
+				Rarity(systemData["rarity"]), Seed(systemData["seed"]))
+		end
+	end
+	-- settings
 	usePlayerInventory = values["usePlayerInventory"] or true
 end
 
@@ -513,7 +534,8 @@ function toInventory(factionIndex, systemList)
 
 	inventory = Faction(factionIndex):getInventory()
 	for i, v in pairs(systemList) do
-		inventory:add(v, true)
+		v.favorite = true
+		inventory:add(v, false)
 	end
 end
 
