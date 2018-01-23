@@ -9,6 +9,8 @@ require("debug")
 local activeSystems = {}
 local usePlayerInventory = true
 local totalTemplates = 5
+local slotRequirements = {0, 51, 128, 320, 800, 2000, 5000, 12500, 19764, 
+	31250, 43065, 59348, 78125, 107554, 148371}
 
 ---- API functions ----
 -- This function is always the very first function that is called in a script, and only once during
@@ -17,7 +19,7 @@ local totalTemplates = 5
 -- called when a script gets newly attached to an object, and when the object is loaded from the
 -- database during a load from disk operation. During a load from disk operation, no parameters
 -- are passed to the function. 
-function initialize()	
+function initialize()
 	if onServer() then	
 		--installFromInventory(6)
 		--chatMessage(tableInfo(Entity():getScripts()))
@@ -148,7 +150,7 @@ function initUI()
 	local pos = vec2(4*margin, 2*margin)
 	local label, button
 	local hotButtonName	= "Tab"
-	local maxSystemCount = 15
+	local maxSystemCount = #slotRequirements
 	--local getTempList = function() r = {} for n = 1, 15 do table.insert(r, n) end return r end
 	--chatMessage(tableInfo(getTempList()))
 		
@@ -189,10 +191,11 @@ function onShowWindow()
 end
 
 function refreshUI()
-	updateUISystemList(systemIcons[0], activeSystems, 3)
+	local upgradeSlotCount = processPowerToUpgradeCount(getProcessPower(Entity()))
+	updateUISystemList(systemIcons[0], activeSystems, upgradeSlotCount)
 	
 	for i=1, totalTemplates do
-		updateUISystemList(systemIcons[i], {}, 3)
+		updateUISystemList(systemIcons[i], {}, upgradeSlotCount)
 	end
 end
 
@@ -262,8 +265,9 @@ function onUseButton(index_in)
 end
 
 function onUpdateButton(index_in)
-	chatMessage("Update button pressed, index: ", index_in, 
-		"Not implemented yet.")
+	chatMessage("Update button pressed, index: ", index_in)
+	
+	refreshUI()
 end
 
 function onClearButton()
@@ -350,15 +354,19 @@ function installFromInventory(inventoryIndex)
 end
 
 -- returns player or allience faction index based on usePlayerInventory value.
-function getFaction()
+function getFaction()	
 	if usePlayerInventory then 
+		if onServer() then
+			return callingPlayer.index
+		end
 		return Player().index
 	end
 	
 	return Entity().factionIndex
 end
 
-function getSystems()
+-- UNINSTALL all upgrades, returns table<int, SystemUpgradeTemplate>
+function getSystems() -- client side
 	local entity = Entity()
 	local scripts = entity:getScripts()
 	local systemPath = "data/scripts/systems/"
@@ -382,11 +390,12 @@ function getSystems()
 	return result
 end
 
-function unInstall(entityIndex, script)
+-- UNINSTALL an upgrade with the valid name
+function unInstall(entityIndex, script) -- server side
 	Entity(entityIndex):removeScript(script)
 end
 
-function installSystems(systemList)
+function installSystems(systemList) -- client side
 	local entity = Entity()
 	for i, st in pairs(systemList) do
 		entity:addScript(st.script, st.seed.int32, st.rarity)
@@ -408,6 +417,25 @@ function toInventory(factionIndex, systemList) -- server side
 	for i, v in pairs(systemList) do
 		inventory:add(v, true)
 	end
+end
+
+function getProcessPower(entity)
+	local blockPlan = entity:getMovePlan()
+	local blockStatistic = blockPlan:getStats()
+	entity:setMovePlan(blockPlan)
+	
+	return blockStatistic.processingPower
+end
+
+function processPowerToUpgradeCount(processingPower)
+	print("process power:", processingPower)
+	for i, requiredPP in ipairs(slotRequirements) do
+		if requiredPP >= processingPower then
+			return (i - 1)
+		end
+	end
+	
+	return #slotRequirements
 end
 
 -- for testing purposes
