@@ -8,6 +8,7 @@ require("debug")
 
 local activeSystems = {}
 local usePlayerInventory = true
+local totalTemplates = 5
 
 ---- API functions ----
 -- This function is always the very first function that is called in a script, and only once during
@@ -119,7 +120,7 @@ function interactionPossible(playerIndex, option)
     return false
 end
 
-function getIcon(seed, rarity)
+function getIcon()
     return "data/textures/icons/circuitry.png"
 end
 
@@ -147,7 +148,8 @@ function initUI()
 	local pos = vec2(4*margin, 2*margin)
 	local label, button
 	local hotButtonName	= "Tab"
-	local getTempList = function() r = {} for n = 1, 15 do table.insert(r, n) end return r end
+	local maxSystemCount = 15
+	--local getTempList = function() r = {} for n = 1, 15 do table.insert(r, n) end return r end
 	--chatMessage(tableInfo(getTempList()))
 		
 	label = window:createLabel(pos,	"Current"%t, math.floor(labelHeight*0.5))	
@@ -157,10 +159,10 @@ function initUI()
 	usePlayerInventoryCheckBox.checked = usePlayerInventory
 	pos.y = pos.y + labelHeight
 		
-	createUISystemList(window, pos, iconSize, getTempList())
+	systemIcons[0] = createUISystemList(window, pos, iconSize, maxSystemCount)
 	pos.y = pos.y + iconSize + 2*margin
 	
-	for i=1, 5 do
+	for i=1, totalTemplates do
 		label = window:createLabel(pos + vec2(0, margin),
 			hotButtonName.." + "..tostring(i), math.floor(labelHeight*0.5))
 		button = window:createButton(
@@ -171,24 +173,24 @@ function initUI()
 			"Update"%t, "onUpdateButton")		
 		pos.y = pos.y + labelHeight
 		
-		createUISystemList(window, pos, iconSize, getTempList())
+		systemIcons[i] = createUISystemList(window, pos, iconSize, maxSystemCount)
 		pos.y = pos.y + iconSize + 2*margin
-	end
-	--window:createButton(Rect(10, size.y - 40, 60, size.y - 10), "test", testFunc)
-	
-	-- icon lists
-	for i=0, 9 do 
-		systemIcons[i] = {}
-	end
+	end	
 end
 
 function onShowWindow()
+	activeSystems = getSystems() --get current list
+	installSystems(activeSystems) --reinstall current
+	
     refreshUI()
 end
 
 function refreshUI()
-	getSystems()
-	test()
+	updateUISystemList(systemIcons[0], activeSystems, 3)
+	
+	for i=1, totalTemplates do
+		updateUISystemList(systemIcons[i], {}, 3)
+	end
 end
 
 local isTabPressed = false
@@ -205,20 +207,25 @@ end
 
 
 ---- UI create ----
-function createUISystemList(window, posVector, size, systemList, padding, borderWidth)
+function createUISystemList(window, posVector, size, count, padding, borderWidth)
 	padding = padding or 6
 	borderWidth = borderWidth or 2
 	local pos = vec2(posVector.x, posVector.y)
 	local picture, frame
 	local buttonSize = vec2(size - borderWidth, size - borderWidth)
 	local border = vec2(borderWidth, borderWidth)
-	for i, v in ipairs(systemList) do
-		createBorder(window, Rect(pos, pos + buttonSize + border), borderWidth - 1)
-		picture = window:createPicture(Rect(pos + border, pos + buttonSize), "")
-		picture.isIcon = true
-		picture.picture = "data/textures/icons/circuitry.png"
+	local result = {}
+	for i=1, count do
+		result[i] = {}
+		result[i]["border"], result[i]["frame"] = 
+			createBorder(window, Rect(pos, pos + buttonSize + border), borderWidth - 1)
+		result[i]["picture"] = window:createPicture(Rect(pos + border, pos + buttonSize), "")
+		result[i]["picture"].isIcon = true
+		--picture.picture = "data/textures/icons/circuitry.png"
 		pos.x = pos.x + size + padding
 	end
+	
+	return result
 end
 
 function createBorder(uiContainer, posRect, borderWidth, borderColor)
@@ -254,6 +261,51 @@ end
 function onUpdateButton(index_in)
 	chatMessage("Update button pressed, index: ", index_in, 
 		"Not implemented yet.")
+end
+
+
+---- UI update ----
+function updateUISystemList(iconList, systemList, availableTotal)
+	local iconIndex = 1
+	local iconPicture, iconBorder	
+	for i, system in pairs(systemList) do		
+		iconPicture = iconList[iconIndex].picture
+		iconPicture.picture = system.icon
+		iconPicture.color = system.rarity.color
+		-- convert tooltip to string
+		local stringTooltip = ""
+		local l = 11
+		local concatFunc = function() 
+			stringTooltip = stringTooltip .. system.tooltip:getLine(l).ltext .. "\n"
+		end
+		-- chatMessage(classInfo(system.tooltip))
+		-- while pcall(concatFunc) do 
+			-- l = l + 1 
+		-- end
+		
+		-- for l=1, system.tooltip:size() do
+			-- stringTooltip = stringTooltip .. system.tooltip:getLine(l).ltext .. "\n"
+		-- end
+		iconPicture.tooltip = stringTooltip
+		
+		iconBorder = iconList[iconIndex].border
+		if iconIndex > availableTotal then
+			iconBorder.backgroundColor = ColorRGB(0, 0, 0)
+		else
+			iconBorder.backgroundColor = system.rarity.color
+		end	
+			
+		iconIndex = iconIndex + 1
+	end
+	
+	for i=iconIndex, #iconList do 
+		iconList[i].picture.picture = ""
+		if i > availableTotal then
+			iconList[i].border.backgroundColor = ColorRGB(0, 0, 0)
+		else
+			iconList[i].border.backgroundColor = ColorRGB(0.8, 0.8, 0.8)
+		end
+	end
 end
 
 
@@ -294,13 +346,39 @@ function getSystems()
 	local scripts = entity:getScripts()
 	local systemPath = "data/scripts/systems/"
 	local seed, rarity
+	local result = {}
 	for i, s in pairs(scripts) do
 		if s:sub(0, #systemPath) == systemPath then
 			e, rarity = entity:invokeFunction(s, "getRarity")
 			e, seed = entity:invokeFunction(s, "getSeed")
-			print(i, ":", s, "rarity", rarity.value, "seed", seed.value)			
+			if seed ~= nil and rarity ~= nil then
+				print(i, ":", s, "rarity", rarity.value, "seed", seed.value)
+				table.insert(result, SystemUpgradeTemplate(s, rarity, seed))
+				entity:removeScript(s)
+				invokeServerFunction("unInstall", entity.index, s)
+			else
+				print("Error! Can't get systemUpgrade values.")
+			end			
 		end
 	end
+	
+	return result
+end
+
+function unInstall(entityIndex, script)
+	Entity(entityIndex):removeScript(script)
+end
+
+function installSystems(systemList)
+	local entity = Entity()
+	for i, st in pairs(systemList) do
+		entity:addScript(st.script, st.seed.int32, st.rarity)
+		invokeServerFunction("install", entity.index, st.script, st.seed.int32, st.rarity)
+	end
+end
+
+function install(entityIndex, script, seed, rarity)
+	Entity(entityIndex):addScript(script, seed, rarity)
 end
 
 -- for testing purposes
@@ -309,12 +387,12 @@ function test()
 		-- invokeServerFunction("test")
 		-- return
 	-- end
-	local componentType = ComponentType.Scripts
+	
+	--[[ local componentType = ComponentType.Scripts
 	local entity = Entity()
 	print(entity.name, "has", componentType, ":", entity:hasComponent(componentType))
-	if entity:hasComponent(componentType) then
-		chatMessage(classInfo(entity))
-	end
+	if entity:hasComponent(componentType) then		
+	end ]]
 end
 --[[ function AddSystem(systemType, seed, rarity)
 	local entity = Entity()
