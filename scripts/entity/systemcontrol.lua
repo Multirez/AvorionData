@@ -214,8 +214,6 @@ function onShowWindow()
 	activeSystems = {}
 	local systemList = getSystems() --get current list
 	installSystems(systemList) --reinstall current
-	
-    refreshUI()
 end
 
 local isTabPressed = false
@@ -395,10 +393,10 @@ function checkSystemsByTemplate(templateList) -- client side
 			if es == 0 and er == 0 then
 				-- check is use or uninstall
 				local systemUpgrade = SystemUpgradeTemplate(s, rarity, seed)
-				local isRemain, index = table.containe(notInstalledList, systemUpgrade, isSystemsEqual)
+				local isRemain, tIndex = table.containe(notInstalledList, systemUpgrade, isSystemsEqual)
 				if isRemain then
-					table.remove(notInstalledList, index)
-					table.insert(installedSystems, i, systemUpgrade)
+					table.remove(notInstalledList, tIndex)
+					table.insert(installedSystems, tIndex, systemUpgrade)
 					lastByPath[s] = systemUpgrade
 				else
 					unInstall(entity.index, s)
@@ -535,7 +533,7 @@ end
 -- UNINSTALL an upgrade with the valid name
 function unInstall(entityIndex, script) 
 	if onClient() then
-		Entity(entityIndex):removeScript(script)
+		Entity(entityIndex):removeScript(script) -- uninsttall on client too, to not wait for server sync
 		invokeServerFunction("unInstall", entityIndex, script)
 		return
 	end
@@ -545,18 +543,20 @@ end
 
 function installSystems(systemList) -- client side
 	chatMessage("installSystems systemList:", systemListInfo(systemList))
+	
 	local entity = Entity()
 	for i, st in pairs(systemList) do
-		table.insert(activeSystems, st) -- add to active list
+		table.insert(activeSystems, i, st) -- add to active list
 		install(entity.index, st.script, st.seed.int32, st.rarity)
 	end
 	
+	invokeServerFunction("restore", secure()) -- share with server
 	refreshUI()
 end
 
 function install(entityIndex, script, seed_int32, rarity)
 	if onClient() then
-		Entity(entityIndex):addScript(script, seed_int32, rarity)
+		-- Entity(entityIndex):addScript(script, seed_int32, rarity)
 		invokeServerFunction("install", entityIndex, script, seed_int32, rarity)		
 		return
 	end
