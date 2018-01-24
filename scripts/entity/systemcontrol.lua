@@ -28,10 +28,10 @@ function initialize()
 	end
 	entity = Entity()	
 	if onServer() then		
-		chatMessage("This message from server.")
 		entity:registerCallback("onSystemsChanged", "onSystemsChanged")
 		-- entity:registerCallback("onPlanModifiedByBuilding", "onPlanModifiedByBuilding")
-		entity:registerCallback("onBlockPlanChanged", "onBlockPlanChanged")
+		entity:registerCallback("onBlockPlanChanged", "onBlockPlanChanged")		
+		chatMessage("System controll was initialized.")
 	else -- on client
 		invokeServerFunction("syncWithClient", Player().index)
 	end
@@ -129,7 +129,7 @@ function onBlockPlanChanged(objectIndex, allBlocksChanged)
 end
 
 
----- UI create ----
+---- UI ----
 -- if this function returns false, the script will not be listed in the interaction window on the client,
 -- even though its UI may be registered
 function interactionPossible(playerIndex, option)
@@ -272,9 +272,6 @@ function onUseButton(button)
 	local lineIndex = buttonToLine[button.index]	
 	chatMessage("Use button pressed, line index:  ", lineIndex, "Not implemented yet.")
 	applyTemplate(systemTemplates[lineIndex])
-	
-	invokeServerFunction("restore", secure()) -- share with server
-	refreshUI()
 end
 
 function onUpdateButton(button)
@@ -351,36 +348,6 @@ end
 function syncWithClient(playerIndex) -- server side
 	invokeClientFunction(Player(playerIndex), "restore", secure())
 end
--- Removes system upgrade from inventory and install it.
-function installFromInventory(inventoryIndex) -- client side
-	-- Check and take system from inventory
-	local inventory = Player():getInventory();
-	local inventoryItem = inventory:find(inventoryIndex)
-	if not inventoryItem or inventoryItem.itemType ~= InventoryItemType.SystemUpgrade then
-		chatMessage("Error: Can't to find SystemUpgrade in the inventory at index: ", inventoryIndex)
-		if inventoryItem then
-			chatMessage(inventoryItem.name, " has InventoryItemType :", inventoryItem.itemType, 
-				" but must be: ", InventoryItemType.SystemUpgrade)
-		end
-		return
-	end
-		
-	local systemUpgrade = inventory:take(inventoryIndex)
-	chatMessage(inventoryItemInfo(systemUpgrade))
-	
-	-- TODO: seek the right way to install ship system 
-	local installResult = Entity():addScript(systemUpgrade.script, 
-		systemUpgrade.seed, systemUpgrade.rarity)
-	if installResult ~= 0 then
-		chatMessage("Error: Can't to install system at current Entity().",
-			"Error code: ", installResult)
-		inventory:add(systemUpgrade, systemUpgrade.recent)
-		return
-	else
-		chatMessage(systemUpgrade.name, "was installed successfully.")
-		table.insert(activeSystems, systemUpgrade)
-	end	
-end
 
 -- returns player or allience faction index based on usePlayerInventory value.
 function getFaction()	
@@ -402,8 +369,7 @@ function applyTemplate(templateList) -- client side
 	-- TODO: checks is template length < slot count, or use sub template
 	local installList
 	activeSystems, installList = checkSystemsByTemplate(templateList)
-	installList = takeFromInventory(installList)
-	installSystems(installList)
+	installFromInventory(installList)
 end
 
 function checkSystemsByTemplate(templateList) -- client side
@@ -489,10 +455,54 @@ function moveSystemUp(system) -- client side
 	install(entity.index, dummyPath, 0, 0)
 end
 
-function takeFromInventory(requestList) -- client side
-	print("takeFromInventory", "Not implemented yet. RequestList:", tableInfo(requestList))
+-- Removes systems from inventory and install its.
+function installFromInventory(requestList, factionIndex, playerIndex)
+	if onClient() then
+		invokeServerFunction("installFromInventory", requestList, getFaction(), Player().index)
+		return
+	end	
+	chatMessage("installFromInventory RequestList:", systemListInfo(requestList))
+	local result = {}
+	-- prepare
+	local inventory = Faction(factionIndex):getInventory()
+	local entries = inventory:getItemsByType(InventoryItemType.SystemUpgrade)
+	-- table.sort(entries, inventoryComparer) -- TODO: does not returns right item after sorting
+	-- seek 
+	local fakeSystem = SystemUpgradeTemplate("basesystem", Rarity(0), Seed(111111))
+	for r, requestSystem in pairs(requestList)do
+		for i, inventoryEntry in pairs(entries) do
+			if isSystemsEqual(requestSystem, inventoryEntry.item) then
+				-- chatMessage("select ", i, " with rarity: ", inventoryEntry.item.rarity, 
+					-- "seed:", inventoryEntry.item.rarity)
+				table.insert(result, r, inventory:take(i)) -- take from inventory
+				entries[i] = { amount = 1, item = fakeSystem }
+				break
+			end
+		end
+	end
 	
-	return {}
+	invokeClientFunction(Player(playerIndex), "installSystems", result)
+end
+
+function inventoryComparer(entryA, entryB)
+	if entryA then
+		if entryB then 
+			return systemComparer(entryA.item, entryB.item)
+		else
+			return true
+		end
+	end
+
+	return false
+end
+
+function systemComparer(systemA, systemB)
+	
+	if systemA.favorite ~= systemB.favorite then 
+		return systemA.favorite
+	end
+	
+	return systemA.rarity.value > systemB.rarity.value
 end
 
 -- UNINSTALL all upgrades, returns table<int, SystemUpgradeTemplate>
@@ -534,11 +544,14 @@ function unInstall(entityIndex, script)
 end
 
 function installSystems(systemList) -- client side
+	chatMessage("installSystems systemList:", systemListInfo(systemList))
 	local entity = Entity()
 	for i, st in pairs(systemList) do
 		table.insert(activeSystems, st) -- add to active list
 		install(entity.index, st.script, st.seed.int32, st.rarity)
 	end
+	
+	refreshUI()
 end
 
 function install(entityIndex, script, seed_int32, rarity)
@@ -584,9 +597,10 @@ function processPowerToUpgradeCount(processingPower)
 end
 
 function isSystemsEqual(systemA, systemB)
-	return systemA.script == systemB.script and
+	return (systemA and systemB and
+		systemA.script == systemB.script and
 		systemA.seed == systemB.seed and
-		systemA.rarity == systemB.rarity	
+		systemA.rarity == systemB.rarity)
 end
 
 function table.containe(tb, value, equalityFunc)
@@ -640,6 +654,15 @@ function inventoryItemInfo(inventoryItem)
 		.. "\n| seed: " .. tostring(inventoryItem.seed)
 	end
 	return info
+end
+
+function systemListInfo(systemList)
+	result = ""
+	for i, s in pairs(systemList) do
+		result = result .. "\n" .. i .. " : " .. s.script ..
+			" rarity "..tostring(s.rarity).." seed "..tostring(s.seed.value)
+	end	
+	return result
 end
 
 -- Returns string formatted values from table
@@ -705,7 +728,7 @@ function chatMessage(message, ...)
 			local pilot = { Entity():getPilotIndices() }
 			for i=1, #pilot do
 				if pilot[i] then
-					Player(pilot[i]):sendChatMessage(Entity().name, 0, msg)
+					Player(pilot[i]):sendChatMessage("Server "..Entity().name, 0, msg)
 				end
 			end
 		else
