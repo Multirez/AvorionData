@@ -26,13 +26,20 @@ function initialize()
 	for i=1, totalTemplates do
 		systemTemplates[i] = {}
 	end
-	if onServer() then	
-		--installFromInventory(6)
-		--chatMessage(tableInfo(Entity():getScripts()))
+	entity = Entity()	
+	if onServer() then			
+		entity:registerCallback("onSystemsChanged", "onSystemsChanged")
+		-- entity:registerCallback("onPlanModifiedByBuilding", "onPlanModifiedByBuilding")
+		entity:registerCallback("onBlockPlanChanged", "onBlockPlanChanged")
+		
+		-- installFromInventory(6)
+		-- chatMessage(tableInfo(Entity():getScripts()))
 		
 		-- local random = Random(Server().seed)
 		-- local seed = random:createSeed()
 		-- local rarity = Rarity(RarityType.Exotic)
+	else
+		invokeServerFunction("syncWithClient", Player().index)
 	end
 end
 
@@ -99,6 +106,7 @@ function restore(values)
 				Rarity(systemData["rarity"]), Seed(systemData["seed"]))
 		end
 	end
+	-- print("restored templates:", tableInfo(systemTemplates))
 	-- settings
 	usePlayerInventory = values["usePlayerInventory"] or true
 end
@@ -190,15 +198,6 @@ function onShowWindow()
     refreshUI()
 end
 
-function refreshUI()
-	local upgradeSlotCount = processPowerToUpgradeCount(getProcessPower(Entity()))
-	updateUISystemList(systemIcons[0], activeSystems, upgradeSlotCount)
-	
-	for i=1, totalTemplates do
-		updateUISystemList(systemIcons[i], systemTemplates[i], upgradeSlotCount)
-	end
-end
-
 local isTabPressed = false
 
 function onKeyboardEvent(key, pressed) 
@@ -209,6 +208,18 @@ function onKeyboardEvent(key, pressed)
 	if isTabPressed and key > 48 and key < 60 and pressed then
 		print("Tab +", key - 48, "was pressed.")
 	end
+end
+
+function onSystemsChanged(shipIndex) 
+	print("onSystemsChanged, shipIndex:", shipIndex, "my index:", Entity().index)
+end
+
+--[[function onPlanModifiedByBuilding(shipIndex) 
+	print("onPlanModifiedByBuilding", shipIndex)
+end]]
+
+function onBlockPlanChanged(objectIndex, allBlocksChanged) 
+	print("onBlockPlanChanged, objectIndex:", objectIndex, "my index:", Entity().index)
 end
 
 
@@ -246,16 +257,19 @@ function createBorder(uiContainer, posRect, borderWidth, borderColor)
 	return borderFrame, backFrame
 end
 
-
 ---- UI callbacks ----
 function onUsePlayerInventory()	
-	local useText
+	if usePlayerInventoryCheckBox.checked ~= usePlayerInventory then
+		usePlayerInventory = usePlayerInventoryCheckBox.checked
+		invokeServerFunction("restore", secure()) -- share with server
+	end
+	
+	local useText	
 	if usePlayerInventoryCheckBox.checked then
 		useText = "Will be used player inventory."%t
 	else
 		useText = "Will be used alliance inventory."%t
-	end
-	
+	end	
 	chatMessage("SystemControl:", useText)
 end
 
@@ -263,7 +277,8 @@ function onUseButton(button)
 	local lineIndex = buttonToLine[button.index]	
 	chatMessage("Use button pressed, line index:  ", lineIndex, "Not implemented yet.")
 	applyTemplate(systemTemplates[lineIndex])
-		
+	
+	invokeServerFunction("restore", secure()) -- share with server
 	refreshUI()
 end
 
@@ -271,16 +286,27 @@ function onUpdateButton(button)
 	local lineIndex = buttonToLine[button.index]	
 	chatMessage("Update button pressed, line index: ", lineIndex)
 	systemTemplates[lineIndex] = { table.unpack(activeSystems) } -- new table
+	invokeServerFunction("restore", secure()) -- share with server
 	refreshUI()
 end
 
 function onClearButton()
 	toInventory(getFaction(), getSystems())
 	activeSystems = {}
+	invokeServerFunction("restore", secure()) -- share with server
 	refreshUI()
 end
 
 ---- UI update ----
+function refreshUI()
+	local upgradeSlotCount = processPowerToUpgradeCount(getProcessPower(Entity()))
+	updateUISystemList(systemIcons[0], activeSystems, upgradeSlotCount)
+	
+	for i=1, totalTemplates do
+		updateUISystemList(systemIcons[i], systemTemplates[i], upgradeSlotCount)
+	end
+end
+
 function updateUISystemList(iconList, systemList, availableTotal)
 	local iconIndex = 1
 	local iconPicture, iconBorder	
@@ -326,6 +352,10 @@ end
 
 
 ---- Functions ----
+-- share settings and templates with player
+function syncWithClient(playerIndex) -- server side
+	invokeClientFunction(Player(playerIndex), "restore", secure())
+end
 -- Removes system upgrade from inventory and install it.
 function installFromInventory(inventoryIndex) -- client side
 	-- Check and take system from inventory
