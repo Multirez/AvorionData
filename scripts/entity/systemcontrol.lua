@@ -27,18 +27,12 @@ function initialize()
 		systemTemplates[i] = {}
 	end
 	entity = Entity()	
-	if onServer() then			
+	if onServer() then		
+		chatMessage("This message from server.")
 		entity:registerCallback("onSystemsChanged", "onSystemsChanged")
 		-- entity:registerCallback("onPlanModifiedByBuilding", "onPlanModifiedByBuilding")
 		entity:registerCallback("onBlockPlanChanged", "onBlockPlanChanged")
-		
-		-- installFromInventory(6)
-		-- chatMessage(tableInfo(Entity():getScripts()))
-		
-		-- local random = Random(Server().seed)
-		-- local seed = random:createSeed()
-		-- local rarity = Rarity(RarityType.Exotic)
-	else
+	else -- on client
 		invokeServerFunction("syncWithClient", Player().index)
 	end
 end
@@ -88,19 +82,19 @@ end
 -- Called to restore previously secured values for the script. Receives the values that were gathered
 -- from the last called to the secure() function. This function is called when the object is read
 -- from disk and restored, after initialize() was called.
-function restore(values)
-	activeSystems = {}
-	
+function restore(values)	
 	if type(values) ~= "table" then
 		return
 	end
-	-- activeSystems data
+	-- activeSystems data	
+	activeSystems = {}
 	for i, systemData in pairs(values["activeSystems"]) do
 		activeSystems[i] =  SystemUpgradeTemplate(systemData["script"],
 			Rarity(systemData["rarity"]), Seed(systemData["seed"]))
 	end
 	-- restore templates data
 	for t=1, totalTemplates do
+		systemTemplates[t] = {}
 		for i, systemData in pairs(values[tostring(t)]) do
 			systemTemplates[t][i] =  SystemUpgradeTemplate(systemData["script"],
 				Rarity(systemData["rarity"]), Seed(systemData["seed"]))
@@ -605,16 +599,16 @@ end
 
 -- for testing purposes
 function test()
-	-- if onClient() then
-		-- invokeServerFunction("test")
-		-- return
-	-- end
 	
 	--[[ local componentType = ComponentType.Scripts
 	local entity = Entity()
 	print(entity.name, "has", componentType, ":", entity:hasComponent(componentType))
 	if entity:hasComponent(componentType) then		
-	end ]]
+	end ]]	
+					
+	--[[ local random = Random(Server().seed)
+	local seed = random:createSeed()
+	local rarity = Rarity(RarityType.Exotic) ]]
 end
 
 
@@ -707,24 +701,20 @@ function chatMessage(message, ...)
 	local length = #message
 	local sendMessage = function(msg)
 		if onServer() then
-			Player(Entity().factionIndex):sendChatMessage(Entity().name, 0, msg)
+			local pilot = { Entity():getPilotIndices() }
+			for i=1, #pilot do
+				if pilot[i] then
+					Player(pilot[i]):sendChatMessage(Entity().name, 0, msg)
+				end
+			end
 		else
-			Player():sendChatMessage(msg)
+			displayChatMessage(msg, Entity().name, 0)
 		end
 	end
 	
 	if length < MaxMessageLength then
 		sendMessage(message)
 		return
-	end
-	
-	if onClient() then
-		local mail = Mail()
-		mail.sender = "Big chat message"%_t
-		mail.header = "This message is to big to show it via chat."%_t
-		mail.text = message
-
-		sendMail(Player().index, mail)
 	end
 	
 	local from = 0
