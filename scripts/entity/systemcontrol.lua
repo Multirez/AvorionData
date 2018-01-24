@@ -12,6 +12,7 @@ local usePlayerInventory = true
 local totalTemplates = 5
 local slotRequirements = {0, 51, 128, 320, 800, 2000, 5000, 12500, 19764, 
 	31250, 43065, 59348, 78125, 107554, 148371}
+local upgradeSlotCount = nil
 local systemPath = "data/scripts/systems/"
 local dummyPath = "data/scripts/entity/dummy.lua"
 
@@ -25,12 +26,12 @@ local dummyPath = "data/scripts/entity/dummy.lua"
 function initialize()
 	for i=1, totalTemplates do
 		systemTemplates[i] = {}
-	end
-	entity = Entity()	
-	if onServer() then		
+	end	
+	
+	local entity = Entity()
+	upgradeSlotCount = processPowerToUpgradeCount(getProcessPower(entity))
+	if onServer() then	
 		entity:registerCallback("onSystemsChanged", "onSystemsChanged")
-		-- entity:registerCallback("onPlanModifiedByBuilding", "onPlanModifiedByBuilding")
-		entity:registerCallback("onBlockPlanChanged", "onBlockPlanChanged")		
 		chatMessage("System controll was initialized.")
 	else -- on client
 		invokeServerFunction("syncWithClient", Player().index)
@@ -116,18 +117,13 @@ function onKeyboardEvent(key, pressed)
 	end
 end
 
-function onSystemsChanged(shipIndex) 
-	print("onSystemsChanged, shipIndex:", shipIndex, "my index:", Entity().index)
+function onSystemsChanged(shipIndex)
+	local entity = Entity()
+	if shipIndex == entity.index then 
+		broadcastInvokeClientFunction("checkSystemsByProcessing")		
+		-- print("onSystemsChanged, shipIndex:", shipIndex, "my index:", Entity().index)
+	end	
 end
-
---[[function onPlanModifiedByBuilding(shipIndex) 
-	print("onPlanModifiedByBuilding", shipIndex)
-end]]
-
-function onBlockPlanChanged(objectIndex, allBlocksChanged) 
-	print("onBlockPlanChanged, objectIndex:", objectIndex, "my index:", Entity().index)
-end
-
 
 ---- UI ----
 -- if this function returns false, the script will not be listed in the interaction window on the client,
@@ -172,7 +168,7 @@ function initUI()
 	local pos = vec2(4*margin, 2*margin)
 	local label, button
 	local hotButtonName	= "Tab"
-	local maxSystemCount = #slotRequirements
+	local maxSystemCount = table.count(slotRequirements)
 	local labelFontSize = math.floor(labelHeight*0.6)
 	--local getTempList = function() r = {} for n = 1, 15 do table.insert(r, n) end return r end
 	--chatMessage(tableInfo(getTempList()))
@@ -268,14 +264,14 @@ end
 
 function onUseButton(button)
 	local lineIndex = buttonToLine[button.index]	
-	chatMessage("Use button pressed, line index:  ", lineIndex, "Not implemented yet.")
+	chatMessage("Use button pressed, line index:", lineIndex)
 	applyTemplate(systemTemplates[lineIndex])
 end
 
 function onUpdateButton(button)
 	local lineIndex = buttonToLine[button.index]	
 	chatMessage("Update button pressed, line index: ", lineIndex)
-	systemTemplates[lineIndex] = { table.unpack(activeSystems) } -- new table
+	systemTemplates[lineIndex] = table.copy(activeSystems) -- new table
 	invokeServerFunction("restore", secure()) -- share with server
 	refreshUI()
 end
@@ -289,7 +285,6 @@ end
 
 ---- UI update ----
 function refreshUI()
-	local upgradeSlotCount = processPowerToUpgradeCount(getProcessPower(Entity()))
 	updateUISystemList(systemIcons[0], activeSystems, upgradeSlotCount)
 	
 	for i=1, totalTemplates do
@@ -300,7 +295,7 @@ end
 function updateUISystemList(iconList, systemList, availableTotal)
 	local iconIndex = 1
 	local iconPicture, iconBorder	
-	for i, system in pairs(systemList) do		
+	for i, system in pairsByKeys(systemList) do		
 		iconPicture = iconList[iconIndex].picture
 		iconPicture.picture = system.icon
 		iconPicture.color = system.rarity.color
@@ -347,6 +342,12 @@ function syncWithClient(playerIndex) -- server side
 	invokeClientFunction(Player(playerIndex), "restore", secure())
 end
 
+function checkSystemsByProcessing()
+	local entity = Entity()
+	upgradeSlotCount = processPowerToUpgradeCount(getProcessPower(entity))
+	-- TODO remove last if not enough slots
+end
+
 -- returns player or allience faction index based on usePlayerInventory value.
 function getFaction()	
 	if not usePlayerInventory then 
@@ -365,17 +366,26 @@ end
 -- uninstall systems that are not in template and try to install missing from inventory
 function applyTemplate(templateList) -- client side
 	-- TODO: checks is template length < slot count, or use sub template
-	local installList
-	activeSystems, installList = checkSystemsByTemplate(templateList)
-	installFromInventory(installList)
+	local installList = table.sub(templateList, 1 , upgradeSlotCount)
+	chatMessage("installList:", systemListInfo(installList))
+	
+	activeSystems, installList = checkSystemsByTemplate(installList)
+	chatMessage("activeSystems:", systemListInfo(activeSystems))
+	chatMessage("installList count:", table.count(installList), systemListInfo(installList))
+	if table.count(installList) > 0 then
+		installFromInventory(installList)
+	else		
+		invokeServerFunction("restore", secure()) -- share with server
+		refreshUI()
+	end
 end
 
 function checkSystemsByTemplate(templateList) -- client side
-	print("checkSystemsByTemplate", "Not implemented yet.")	
+	chatMessage("checkSystemsByTemplate")	
 	local entity = Entity()
 	local fillIndex, dummiesTotal = fillEmptyWithDummies(entity)	
 	local installedSystems = {}
-	local notInstalledList = {unpack(templateList)}
+	local notInstalledList = table.copy(templateList)
 	local uninstalledList = {}
 	local lastByPath = {}
 	local es, seed, er, rarity
@@ -395,12 +405,12 @@ function checkSystemsByTemplate(templateList) -- client side
 				local systemUpgrade = SystemUpgradeTemplate(s, rarity, seed)
 				local isRemain, tIndex = table.containe(notInstalledList, systemUpgrade, isSystemsEqual)
 				if isRemain then
-					table.remove(notInstalledList, tIndex)
-					table.insert(installedSystems, tIndex, systemUpgrade)
+					notInstalledList[tIndex] = nil
+					installedSystems[tIndex] = systemUpgrade
 					lastByPath[s] = systemUpgrade
 				else
 					unInstall(entity.index, s)
-					table.insert(uninstalledList, i, systemUpgrade)
+					uninstalledList[i] = systemUpgrade
 				end
 			else
 				chatMessage("Error! Can't get systemUpgrade values for ", s, ". I will to delete it.")
@@ -412,8 +422,9 @@ function checkSystemsByTemplate(templateList) -- client side
 	for i=1, dummiesTotal do
 		unInstall(entity.index, dummyPath)
 	end
-	-- return uninstalled systems to faction inventory
-	toInventory(getFaction(), uninstalledList) 
+	if table.count(uninstalledList) > 0 then -- return uninstalled systems to faction inventory
+		toInventory(getFaction(), uninstalledList) 
+	end
 	
 	return installedSystems, notInstalledList
 end
@@ -456,6 +467,7 @@ end
 -- Removes systems from inventory and install its.
 function installFromInventory(requestList, factionIndex, playerIndex)
 	if onClient() then
+		chatMessage("installFromInventory RequestList:", systemListInfo(requestList))
 		invokeServerFunction("installFromInventory", requestList, getFaction(), Player().index)
 		return
 	end	
@@ -469,10 +481,10 @@ function installFromInventory(requestList, factionIndex, playerIndex)
 	local fakeSystem = SystemUpgradeTemplate("basesystem", Rarity(0), Seed(111111))
 	for r, requestSystem in pairs(requestList)do
 		for i, inventoryEntry in pairs(entries) do
-			if isSystemsEqual(requestSystem, inventoryEntry.item) then
+			if inventoryEntry and isSystemsEqual(requestSystem, inventoryEntry.item) then
 				-- chatMessage("select ", i, " with rarity: ", inventoryEntry.item.rarity, 
 					-- "seed:", inventoryEntry.item.rarity)
-				table.insert(result, r, inventory:take(i)) -- take from inventory
+				result[r] = inventory:take(i) -- take from inventory
 				entries[i] = { amount = 1, item = fakeSystem }
 				break
 			end
@@ -516,7 +528,8 @@ function getSystems() -- client side
 			e, seed = entity:invokeFunction(s, "getSeed")
 			if seed ~= nil and rarity ~= nil then
 				print(i, ":", s, "rarity", rarity.value, "seed", seed.value)
-				table.insert(result, SystemUpgradeTemplate(s, rarity, seed))
+				-- local key = type(i) == "string" and i or tostring(i)
+				result[i] = SystemUpgradeTemplate(s, rarity, seed)
 				unInstall(entity.index, s)
 			else
 				print("Error! Can't get systemUpgrade values.")
@@ -542,12 +555,14 @@ function unInstall(entityIndex, script)
 end
 
 function installSystems(systemList) -- client side
-	chatMessage("installSystems systemList:", systemListInfo(systemList))
+	chatMessage("installSystems:", systemListInfo(systemList))
 	
 	local entity = Entity()
-	for i, st in pairs(systemList) do
-		table.insert(activeSystems, i, st) -- add to active list
-		install(entity.index, st.script, st.seed.int32, st.rarity)
+	for k, st in pairsByKeys(systemList) do
+		if k and st then
+			activeSystems[k] = st -- add to active list
+			install(entity.index, st.script, st.seed.int32, st.rarity)
+		end
 	end
 	
 	invokeServerFunction("restore", secure()) -- share with server
@@ -593,7 +608,7 @@ function processPowerToUpgradeCount(processingPower)
 		end
 	end
 	
-	return #slotRequirements
+	return table.count(slotRequirements)
 end
 
 function isSystemsEqual(systemA, systemB)
@@ -610,6 +625,36 @@ function table.containe(tb, value, equalityFunc)
 		end
 	end
 	return false
+end
+
+function table.sub(tb, firstIndex, lastIndex)
+	local index = 0
+	local result = {}
+	for k, v in pairs(tb) do 
+		index = index + 1
+		if firstIndex <= index and index <= lastIndex then
+			result[k] = v
+		end
+	end
+	
+	return result
+end
+
+function table.copy(tb)
+	local result = {}
+	for k, v in pairs(tb) do 
+		result[k] = v
+	end
+	return result
+end
+
+function table.count(tb)
+	local count = 0
+	for _ in pairs(tb) do 
+		count = count + 1
+	end
+	
+	return count
 end
 
 -- for testing purposes
@@ -658,8 +703,8 @@ end
 
 function systemListInfo(systemList)
 	result = ""
-	for i, s in pairs(systemList) do
-		result = result .. "\n" .. i .. " : " .. s.script ..
+	for k, s in pairs(systemList) do
+		result = result .. "\n" .. tostring(k) .. " : " .. s.script ..
 			" rarity "..tostring(s.rarity).." seed "..tostring(s.seed.value)
 	end	
 	return result
@@ -768,7 +813,7 @@ function sendMail(playerIndex, mail)
 	Player(playerIndex):addMail(mail)
 end
 
--- Returns table with function (index = name) parameters
+-- Returns table<int:index, string:name> with function parameters
 function getArgs(fun)
 	local args = {}
 	local hook = debug.gethook()
