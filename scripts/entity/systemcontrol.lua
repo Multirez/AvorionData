@@ -106,6 +106,30 @@ function restore(values)
 end
 
 
+function onKeyboardEvent(key, pressed) 
+	if key == 9 then -- Tab key
+		isTabPressed = pressed
+	end
+	
+	if isTabPressed and key > 48 and key < 60 and pressed then
+		print("Tab +", key - 48, "was pressed.")
+	end
+end
+
+function onSystemsChanged(shipIndex) 
+	print("onSystemsChanged, shipIndex:", shipIndex, "my index:", Entity().index)
+end
+
+--[[function onPlanModifiedByBuilding(shipIndex) 
+	print("onPlanModifiedByBuilding", shipIndex)
+end]]
+
+function onBlockPlanChanged(objectIndex, allBlocksChanged) 
+	print("onBlockPlanChanged, objectIndex:", objectIndex, "my index:", Entity().index)
+end
+
+
+---- UI create ----
 -- if this function returns false, the script will not be listed in the interaction window on the client,
 -- even though its UI may be registered
 function interactionPossible(playerIndex, option)
@@ -139,24 +163,26 @@ function initUI()
     mainWindow.moveable = 1
 
 	local window = mainWindow
-	local scale = 0.9*size.y
+	local scale = 0.82*size.y
 	local labelHeight = 0.06*scale
 	local buttonWidth = 0.2*scale
 	local iconSize = 0.1*scale
-	local margin = 0.01*scale
+	local margin = 0.016*scale
+	local padding = 0.25*labelHeight 
 	local pos = vec2(4*margin, 2*margin)
 	local label, button
 	local hotButtonName	= "Tab"
 	local maxSystemCount = #slotRequirements
+	local labelFontSize = math.floor(labelHeight*0.6)
 	--local getTempList = function() r = {} for n = 1, 15 do table.insert(r, n) end return r end
 	--chatMessage(tableInfo(getTempList()))
 		
-	label = window:createLabel(pos,	"Current"%t, math.floor(labelHeight*0.5))
+	label = window:createLabel(pos + vec2(0, padding), "Current"%t, labelFontSize)
 	button = window:createButton(
 		Rect(pos.x + buttonWidth + margin, pos.y, pos.x + 2*buttonWidth, pos.y + labelHeight),
 		"Clear"%t, "onClearButton")
 	usePlayerInventoryCheckBox = window:createCheckBox(
-		Rect(pos.x + 2*buttonWidth + margin, pos.y, pos.x + 4*buttonWidth, pos.y + labelHeight),
+		Rect(pos.x + 2*buttonWidth + margin, pos.y + padding, pos.x + 4*buttonWidth, pos.y + labelHeight),
 		"Use player inventory:"%t, "onUsePlayerInventory")
 	usePlayerInventoryCheckBox.checked = usePlayerInventory
 	pos.y = pos.y + labelHeight
@@ -165,8 +191,8 @@ function initUI()
 	pos.y = pos.y + iconSize + 2*margin
 	
 	for i=1, totalTemplates do
-		label = window:createLabel(pos + vec2(0, margin),
-			hotButtonName.." + "..tostring(i), math.floor(labelHeight*0.5))
+		label = window:createLabel(pos + vec2(0, padding),
+			hotButtonName.." + "..tostring(i), labelFontSize)
 		button = window:createButton(
 			Rect(pos.x + buttonWidth + margin, pos.y, pos.x + 2*buttonWidth, pos.y + labelHeight),
 			"Use"%t, "onUseButton")
@@ -193,31 +219,6 @@ function onShowWindow()
 end
 
 local isTabPressed = false
-
-function onKeyboardEvent(key, pressed) 
-	if key == 9 then -- Tab key
-		isTabPressed = pressed
-	end
-	
-	if isTabPressed and key > 48 and key < 60 and pressed then
-		print("Tab +", key - 48, "was pressed.")
-	end
-end
-
-function onSystemsChanged(shipIndex) 
-	print("onSystemsChanged, shipIndex:", shipIndex, "my index:", Entity().index)
-end
-
---[[function onPlanModifiedByBuilding(shipIndex) 
-	print("onPlanModifiedByBuilding", shipIndex)
-end]]
-
-function onBlockPlanChanged(objectIndex, allBlocksChanged) 
-	print("onBlockPlanChanged, objectIndex:", objectIndex, "my index:", Entity().index)
-end
-
-
----- UI create ----
 function createUISystemList(window, posVector, size, count, padding, borderWidth)
 	padding = padding or 6
 	borderWidth = borderWidth or 2
@@ -256,15 +257,15 @@ function onUsePlayerInventory()
 	if usePlayerInventoryCheckBox.checked ~= usePlayerInventory then
 		usePlayerInventory = usePlayerInventoryCheckBox.checked
 		invokeServerFunction("restore", secure()) -- share with server
-	end
-	
-	local useText	
-	if usePlayerInventoryCheckBox.checked then
-		useText = "Will be used player inventory."%t
-	else
-		useText = "Will be used alliance inventory."%t
+				
+		local useText	
+		if usePlayerInventoryCheckBox.checked then
+			useText = "Will be used player inventory."%t
+		else
+			useText = "Will be used alliance inventory."%t
+		end	
+		chatMessage("SystemControl:", useText)
 	end	
-	chatMessage("SystemControl:", useText)
 end
 
 function onUseButton(button)
