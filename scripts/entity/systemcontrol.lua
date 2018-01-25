@@ -145,7 +145,6 @@ function getIcon()
 end
 
 local mainWindow = nil
-local isInputCooldown = false -- blocks user input
 local systemIcons = {}
 local buttonToLine = {}
 local usePlayerInventoryCheckBox
@@ -267,11 +266,6 @@ end
 
 ---- UI callbacks ----
 function onUsePlayerInventory()	
-	if isInputCooldown then -- blocks user input
-		usePlayerInventoryCheckBox.checked = usePlayerInventory
-		return 
-	end 
-	isInputCooldown = true
 	if usePlayerInventoryCheckBox.checked ~= usePlayerInventory then
 		usePlayerInventory = usePlayerInventoryCheckBox.checked
 		invokeServerFunction("restore", secure()) -- share with server
@@ -284,20 +278,15 @@ function onUsePlayerInventory()
 		end	
 		chatMessage("SystemControl:", useText)
 	end	
-	isInputCooldown = false
 end
 
 function onUseButton(button)
-	if isInputCooldown then return end -- blocks user input
-	isInputCooldown = true
 	local lineIndex = buttonToLine[button.index]	
 	chatMessage(MessageType.Whisp, "Use button pressed, template index:", lineIndex)
 	applyTemplate(systemTemplates[lineIndex])
 end
 
-function onUpdateButton(button)	
-	if isInputCooldown then return end -- blocks user input
-	isInputCooldown = true
+function onUpdateButton(button)
 	local lineIndex = buttonToLine[button.index]	
 	chatMessage(MessageType.Whisp, "Update button pressed, template index: ", lineIndex)
 	systemTemplates[lineIndex] = table.copy(activeSystems) -- new table
@@ -306,8 +295,6 @@ function onUpdateButton(button)
 end
 
 function onClearButton()
-	if isInputCooldown then return end -- blocks user input
-	isInputCooldown = true 
 	toInventory(getFaction(), getSystems())
 	activeSystems = {}
 	invokeServerFunction("restore", secure()) -- share with server
@@ -321,8 +308,6 @@ function refreshUI()
 	for i=1, totalTemplates do
 		updateUISystemList(systemIcons[i], systemTemplates[i], upgradeSlotCount)
 	end
-	
-	isInputCooldown = false
 end
 
 function updateUISystemList(iconList, systemList, availableTotal)
@@ -387,11 +372,11 @@ end
 function applyTemplate(templateList) -- client side
 	-- checks is template length < slot count, or use sub template	
 	local installList = table.sub(templateList, 1 , upgradeSlotCount)	
-	print("----templateList:", systemListInfo(installList))
+	chatMessage("templateList:", systemListInfo(installList))
 	
 	activeSystems, installList = checkSystemsByTemplate(installList)
-	print("already in activeSystems:", systemListInfo(activeSystems))
-	print("installList count:", table.count(installList), systemListInfo(installList))
+	chatMessage("already activeSystems:", systemListInfo(activeSystems))
+	-- chatMessage("installList count:", table.count(installList), systemListInfo(installList))
 	if table.count(installList) > 0 then
 		installFromInventory(installList)
 	else		
@@ -414,12 +399,8 @@ function checkSystemsByTemplate(templateList) -- client side
 		-- work only with scripts from systems folder
 		if s:sub(0, #systemPath) == systemPath then
 			if lastByPath[s] then --move up previous to invoke current
-				moveSystemUp(lastByPath[s].system)				
+				moveSystemUp(lastByPath[s])
 				dummiesTotal = dummiesTotal + 1
-				fillIndex = fillIndex + 1
-				while scripts[fillIndex] do fillIndex = fillIndex + 1 end -- to empty
-				installedSystems[fillIndex] = lastByPath[s].system
-				installSystems[lastByPath[s].index] = nil
 			end
 			lastByPath[s] = nil			
 			es, rarity = entity:invokeFunction(s, "getRarity")			
@@ -430,8 +411,8 @@ function checkSystemsByTemplate(templateList) -- client side
 				local isRemain, tIndex = table.containe(notInstalledList, systemUpgrade, isSystemsEqual)
 				if isRemain then
 					notInstalledList[tIndex] = nil
-					installedSystems[i] = systemUpgrade
-					lastByPath[s] = { system = systemUpgrade, index = i }
+					installedSystems[tIndex] = systemUpgrade
+					lastByPath[s] = systemUpgrade
 				else
 					unInstall(entity.index, s)
 					uninstalledList[i] = systemUpgrade
@@ -454,7 +435,7 @@ function checkSystemsByTemplate(templateList) -- client side
 end
 
 function fillEmptyWithDummies(entity)
-	local scripts = entity:getScripts() -- TODO must to be the script list from server
+	local scripts = entity:getScripts()
 	local fillToIndex = 0
 	local countByPath = {}
 	for i, s in pairs(scripts) do -- prepare countByPath
@@ -491,7 +472,7 @@ end
 -- Removes systems from inventory and install its.
 function installFromInventory(requestList, factionIndex, playerIndex)
 	if onClient() then
-		print("installFromInventory RequestList:", systemListInfo(requestList))
+		-- chatMessage("installFromInventory RequestList:", systemListInfo(requestList))
 		invokeServerFunction("installFromInventory", requestList, getFaction(), Player().index)
 		return
 	end	
@@ -515,7 +496,7 @@ function installFromInventory(requestList, factionIndex, playerIndex)
 		end
 	end
 	
-	invokeClientFunction(Player(playerIndex), "installSystems",  Entity():getScripts(), result)
+	invokeClientFunction(Player(playerIndex), "installSystems", result)
 end
 
 function inventoryComparer(entryA, entryB)
@@ -609,22 +590,17 @@ function installSystems(scriptList, systemList) -- client side
 			invokeServerFunction("sendEntityScriptList", Player().index, "installSystems", systemList)
 			return
 		end	
-		print("installSystems list:", systemListInfo(systemList))
+		chatMessage("installSystems list:", systemListInfo(systemList))
 		
 		local entity = Entity()
-		local scriptIndex = 1
 		for k, st in pairsByKeys(systemList) do
-			-- find empty index
-			while scriptList[scriptIndex] do scriptIndex = scriptIndex + 1 end
-			if k and st then -- install
-				activeSystems[scriptIndex] = st -- add to active list
+			if k and st then
+				activeSystems[k] = st -- add to active list
 				install(entity.index, st.script, st.seed.int32, st.rarity)
-				scriptIndex = scriptIndex + 1
 			end
 		end
 	end
 	
-	print("activeSystems:", systemListInfo(activeSystems))
 	invokeServerFunction("restore", secure()) -- share state with server
 	refreshUI()
 end
