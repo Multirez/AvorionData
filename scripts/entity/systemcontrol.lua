@@ -15,6 +15,8 @@ local slotRequirements = {0, 51, 128, 320, 800, 2000, 5000, 12500, 19764,
 local upgradeSlotCount = nil
 local systemPath = "data/scripts/systems/"
 local dummyPath = "data/scripts/entity/dummy.lua"
+-- ChatMessageType.Information on client fires attempt to index a nil value, create own enum
+local MessageType = { Normal=0, Error=1, Warning=2, Information=3, Whisp=4}
 
 ---- API functions ----
 -- This function is always the very first function that is called in a script, and only once during
@@ -280,13 +282,13 @@ end
 
 function onUseButton(button)
 	local lineIndex = buttonToLine[button.index]	
-	chatMessage("Use button pressed, line index:", lineIndex)
+	chatMessage(MessageType.Whisp, "Use button pressed, template index:", lineIndex)
 	applyTemplate(systemTemplates[lineIndex])
 end
 
 function onUpdateButton(button)
 	local lineIndex = buttonToLine[button.index]	
-	chatMessage("Update button pressed, line index: ", lineIndex)
+	chatMessage(MessageType.Whisp, "Update button pressed, template index: ", lineIndex)
 	systemTemplates[lineIndex] = table.copy(activeSystems) -- new table
 	invokeServerFunction("restore", secure()) -- share with server
 	refreshUI()
@@ -368,23 +370,23 @@ end
 
 -- uninstall systems that are not in template and try to install missing from inventory
 function applyTemplate(templateList) -- client side
-	-- TODO: checks is template length < slot count, or use sub template
-	local installList = table.sub(templateList, 1 , upgradeSlotCount)
-	chatMessage("installList:", systemListInfo(installList))
+	-- checks is template length < slot count, or use sub template	
+	local installList = table.sub(templateList, 1 , upgradeSlotCount)	
+	chatMessage("templateList:", systemListInfo(installList))
 	
 	activeSystems, installList = checkSystemsByTemplate(installList)
-	chatMessage("activeSystems:", systemListInfo(activeSystems))
-	chatMessage("installList count:", table.count(installList), systemListInfo(installList))
+	chatMessage("already activeSystems:", systemListInfo(activeSystems))
+	-- chatMessage("installList count:", table.count(installList), systemListInfo(installList))
 	if table.count(installList) > 0 then
 		installFromInventory(installList)
 	else		
-		invokeServerFunction("restore", secure()) -- share with server
+		invokeServerFunction("restore", secure()) -- share state with server
 		refreshUI()
 	end
 end
 
 function checkSystemsByTemplate(templateList) -- client side
-	chatMessage("checkSystemsByTemplate")	
+	-- chatMessage("checkSystemsByTemplate")	
 	local entity = Entity()
 	local fillIndex, dummiesTotal = fillEmptyWithDummies(entity)	
 	local installedSystems = {}
@@ -470,16 +472,16 @@ end
 -- Removes systems from inventory and install its.
 function installFromInventory(requestList, factionIndex, playerIndex)
 	if onClient() then
-		chatMessage("installFromInventory RequestList:", systemListInfo(requestList))
+		-- chatMessage("installFromInventory RequestList:", systemListInfo(requestList))
 		invokeServerFunction("installFromInventory", requestList, getFaction(), Player().index)
 		return
 	end	
-	chatMessage("installFromInventory RequestList:", systemListInfo(requestList))
+	-- chatMessage("installFromInventory RequestList:", systemListInfo(requestList))
 	local result = {}
 	-- prepare
 	local inventory = Faction(factionIndex):getInventory()
 	local entries = inventory:getItemsByType(InventoryItemType.SystemUpgrade)
-	-- table.sort(entries, inventoryComparer) -- TODO: does not returns right item after sorting
+	-- table.sort(entries, inventoryComparer) -- TODO: it's broke item index after sorting
 	-- seek 
 	local fakeSystem = SystemUpgradeTemplate("basesystem", Rarity(0), Seed(111111))
 	for r, requestSystem in pairs(requestList)do
@@ -557,18 +559,49 @@ function unInstall(entityIndex, script)
 	Entity(entityIndex):removeScript(script)
 end
 
-function installSystems(systemList) -- client side
-	chatMessage("installSystems:", systemListInfo(systemList))
-	
-	local entity = Entity()
-	for k, st in pairsByKeys(systemList) do
-		if k and st then
-			activeSystems[k] = st -- add to active list
-			install(entity.index, st.script, st.seed.int32, st.rarity)
+-- for share server entity scripts with client
+function sendEntityScriptList(targetPlayerIndex, targetClientFunctionName, ...) -- server side
+	if onClient() then
+		print("Error! Try to sendEntityScriptList from client.",
+			"You must invoke this function only on server side.",
+			"Callback name:", targetClientFunctionName)
+		return
+	end
+	-- chatMessage("sendEntityScriptList: send scripList to", targetClientFunctionName)
+	invokeClientFunction(Player(targetPlayerIndex), targetClientFunctionName, 
+		Entity():getScripts(), ...)
+end
+
+function installSystems(scriptList, systemList) -- client side
+	if not systemList then -- function called with one argument
+		systemList = scriptList
+		scriptList = nil		
+		if not systemList then -- error
+			print("Error! installSystems: systemList can't be nil.")
+			
+			invokeServerFunction("restore", secure()) -- share state with server
+			refreshUI()
+			return
+		end
+	end
+	if table.count(systemList) > 0 then	
+		if not scriptList then	
+			-- chatMessage("installSystems: Try to get server script list.")
+			invokeServerFunction("sendEntityScriptList", Player().index, "installSystems", systemList)
+			return
+		end	
+		chatMessage("installSystems list:", systemListInfo(systemList))
+		
+		local entity = Entity()
+		for k, st in pairsByKeys(systemList) do
+			if k and st then
+				activeSystems[k] = st -- add to active list
+				install(entity.index, st.script, st.seed.int32, st.rarity)
+			end
 		end
 	end
 	
-	invokeServerFunction("restore", secure()) -- share with server
+	invokeServerFunction("restore", secure()) -- share state with server
 	refreshUI()
 end
 
@@ -766,8 +799,6 @@ function pairsByKeys(t, f)
 	return iter
 end
 
--- ChatMessageType.Information on client fires attempt to index a nil value, create own enum
-local MessageType = { Normal=0, Information=3, Error=1, Warning=2, Whisp=4} 
 local MaxMessageLength = 500
 function chatMessage(messageType, ...)
 	local message = ""
