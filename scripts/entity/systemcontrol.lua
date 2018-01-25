@@ -120,8 +120,8 @@ end
 function onSystemsChanged(shipIndex)
 	local entity = Entity()
 	if shipIndex == entity.index then 
-		broadcastInvokeClientFunction("checkSystemsByProcessing")		
-		-- print("onSystemsChanged, shipIndex:", shipIndex, "my index:", Entity().index)
+		print("onSystemsChanged")
+		deferredCallback(1.0, "broadcastInvokeClientFunction", "checkSystemsByProcessing")		
 	end	
 end
 
@@ -342,6 +342,7 @@ function syncWithClient(playerIndex) -- server side
 	invokeClientFunction(Player(playerIndex), "restore", secure())
 end
 
+-- recalculate available slots and remove extra updates
 function checkSystemsByProcessing()
 	local entity = Entity()
 	upgradeSlotCount = processPowerToUpgradeCount(getProcessPower(entity))
