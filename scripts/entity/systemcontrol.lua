@@ -142,6 +142,7 @@ function getIcon()
     return "data/textures/icons/circuitry.png"
 end
 
+local mainWindow = nil
 local systemIcons = {}
 local buttonToLine = {}
 local usePlayerInventoryCheckBox
@@ -151,9 +152,9 @@ function initUI()
     local res = getResolution()
 
     local menu = ScriptUI()
-    local mainWindow = menu:createWindow(Rect(res * 0.5 - size * 0.5, res * 0.5 + size * 0.5));
-    menu:registerWindow(mainWindow, "System control"%_t);
-
+    mainWindow = menu:createWindow(Rect(res * 0.5 - size * 0.5, res * 0.5 + size * 0.5))
+    menu:registerWindow(mainWindow, "System control"%_t)
+	
     mainWindow.caption = "System control"%_t
     mainWindow.showCloseButton = 1
     mainWindow.moveable = 1
@@ -246,6 +247,21 @@ function createBorder(uiContainer, posRect, borderWidth, borderColor)
 	return borderFrame, backFrame
 end
 
+-- this function gets called whenever the ui window gets rendered, AFTER the window was rendered (client only)
+function renderUI()
+	-- draw tooltip
+	if mainWindow.visible then
+		for l=0, totalTemplates do
+			for _, icon in pairs(systemIcons[l]) do
+				if icon["tooltip"] and icon["border"].mouseOver then
+					local renderer = TooltipRenderer(icon["tooltip"])
+					renderer:drawMouseTooltip(Mouse().position)
+				end
+			end
+		end
+	end
+end
+
 ---- UI callbacks ----
 function onUsePlayerInventory()	
 	if usePlayerInventoryCheckBox.checked ~= usePlayerInventory then
@@ -298,22 +314,8 @@ function updateUISystemList(iconList, systemList, availableTotal)
 	for i, system in pairsByKeys(systemList) do		
 		iconPicture = iconList[iconIndex].picture
 		iconPicture.picture = system.icon
-		iconPicture.color = system.rarity.color
-		-- convert tooltip to string
-		local stringTooltip = ""
-		local l = 11
-		local concatFunc = function() 
-			stringTooltip = stringTooltip .. system.tooltip:getLine(l).ltext .. "\n"
-		end
-		-- chatMessage(classInfo(system.tooltip))
-		-- while pcall(concatFunc) do 
-			-- l = l + 1 
-		-- end
-		
-		-- for l=1, system.tooltip:size() do
-			-- stringTooltip = stringTooltip .. system.tooltip:getLine(l).ltext .. "\n"
-		-- end
-		iconPicture.tooltip = stringTooltip
+		iconPicture.color = system.rarity.color		
+		iconList[iconIndex]["tooltip"] = system.tooltip
 		
 		iconBorder = iconList[iconIndex].border
 		if iconIndex > availableTotal then
