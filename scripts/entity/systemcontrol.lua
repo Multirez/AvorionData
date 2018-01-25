@@ -32,7 +32,7 @@ function initialize()
 	upgradeSlotCount = processPowerToUpgradeCount(getProcessPower(entity))
 	if onServer() then	
 		entity:registerCallback("onSystemsChanged", "onSystemsChanged")
-		chatMessage("System controll was initialized.")
+		chatMessage(ChatMessageType.Whisp, "System controll was initialized.")
 	else -- on client
 		invokeServerFunction("syncWithClient", Player().index)
 	end
@@ -250,7 +250,7 @@ end
 -- this function gets called whenever the ui window gets rendered, AFTER the window was rendered (client only)
 function renderUI()
 	-- draw tooltip
-	if mainWindow.visible then
+	-- if mainWindow.visible then -- render UI calls only if window is visible
 		for l=0, totalTemplates do
 			for _, icon in pairs(systemIcons[l]) do
 				if icon["tooltip"] and icon["border"].mouseOver then
@@ -259,7 +259,7 @@ function renderUI()
 				end
 			end
 		end
-	end
+	-- end
 end
 
 ---- UI callbacks ----
@@ -622,6 +622,9 @@ function isSystemsEqual(systemA, systemB)
 end
 
 function table.containe(tb, value, equalityFunc)
+	if not equalityFunc then
+		equalityFunc = function(a,b) return a==b end
+	end
 	for i, v in pairs(tb) do
 		if equalityFunc(v, value) then
 			return true, i
@@ -763,24 +766,28 @@ function pairsByKeys(t, f)
 	return iter
 end
 
+-- ChatMessageType.Information on client fires attempt to index a nil value, create own enum
+local MessageType = { Normal=0, Information=3, Error=1, Warning=2, Whisp=4} 
 local MaxMessageLength = 500
-
-function chatMessage(message, ...)
-	local arg = {...}
-	for i,v in ipairs(arg) do
-		message = message .. " " .. tostring(v)
+function chatMessage(messageType, ...)
+	local message = ""
+	if not table.containe(MessageType, messageType) then
+		message = tostring(messageType)
+		messageType = MessageType.Normal
 	end
+	message = table.concat({message, ...}, " ")
 	local length = #message
+	
 	local sendMessage = function(msg)
 		if onServer() then
 			local pilot = { Entity():getPilotIndices() }
 			for i=1, #pilot do
 				if pilot[i] then
-					Player(pilot[i]):sendChatMessage("Server "..Entity().name, 0, msg)
+					Player(pilot[i]):sendChatMessage("Server "..Entity().name, messageType, msg)
 				end
 			end
 		else
-			displayChatMessage(msg, Entity().name, 0)
+			displayChatMessage(msg, Entity().name, messageType)
 		end
 	end
 	
