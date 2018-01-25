@@ -192,11 +192,11 @@ function initUI()
 			hotButtonName.." + "..tostring(i), labelFontSize)
 		button = window:createButton(
 			Rect(pos.x + buttonWidth + margin, pos.y, pos.x + 2*buttonWidth, pos.y + labelHeight),
-			"Use"%t, "onUseButton")
+			"Update"%t, "onUpdateButton")
 		buttonToLine[button.index] = i
 		button = window:createButton(
 			Rect(pos.x + 2*buttonWidth + margin, pos.y, pos.x + 3*buttonWidth, pos.y + labelHeight),
-			"Update"%t, "onUpdateButton")		
+			"Use"%t, "onUseButton")
 		pos.y = pos.y + labelHeight
 		buttonToLine[button.index] = i
 		
