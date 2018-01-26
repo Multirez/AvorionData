@@ -738,7 +738,7 @@ end
 function tableSub(tb, firstIndex, lastIndex)
 	local index = 0
 	local result = {}
-	for k, v in pairs(tb) do 
+	for k, v in pairsByKeys(tb) do 
 		index = index + 1
 		if firstIndex <= index and index <= lastIndex then
 			result[k] = v
