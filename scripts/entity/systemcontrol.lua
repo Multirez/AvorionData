@@ -464,6 +464,80 @@ function getFaction()
 	return playerIndex or Entity().factionIndex
 end
 
+--[[ -- update the list of active systems with the help of smart reinstalling
+-- also can to call some function after update
+function cleverUpdateSystems(scripts, activeMap, onUpdateFuncName, ...) -- client side
+	isInputCooldown = true
+	if type(activeMap) ~= "table" then 
+		local entity = Entity()
+		local fillIndex, dummiesTotal = fillEmptyWithDummies(scripts)
+		local es, seed, er, rarity, systemUpgrade, isSystem
+		local lastByPath = {} -- { path = { system = SystemUpgrade, index = currentIndex } }
+		local result {} -- { currentIndex = { system = SystemUpgrade, index = startIndex } }
+		
+		-- try to get list -- sequence must to be saved
+		for i, s in pairs(scripts) do
+			-- work only with scripts from systems folder
+			if s:sub(0, #systemPath) == systemPath then
+				if lastByPath[s] then --move up previous to invokeFunction on current
+					moveSystemUp(lastByPath[s].system)				
+					dummiesTotal = dummiesTotal + 1
+					fillIndex = fillIndex + 1
+					while scripts[fillIndex] do fillIndex = fillIndex + 1 end -- to empty
+					result[fillIndex] = result[lastByPath[s].index]
+					result[lastByPath[s].index] = nil
+				end
+				lastByPath[s] = nil
+				
+				if activeSystems[i] then
+					systemUpgrade = activeSystems[i]
+				else
+					er, rarity = entity:invokeFunction(s, "getRarity")			
+					es, seed = entity:invokeFunction(s, "getSeed")
+					if er ~= 0 or es ~= 0 then
+						print("Error! Can't get systemUpgrade values for ", s, 
+							"I will create a replacement with a common rarity.")
+					end
+					systemUpgrade = SystemUpgradeTemplate(s, rarity or Rarity(0), seed or Seed(111111))
+				end
+				
+				result[i] = { system = SystemUpgrade, index = i }
+				lastByPath[s] = { system = systemUpgrade, index = i }
+			end
+		end
+		
+		-- remove dummies
+		for i=1, dummiesTotal do
+			unInstall(entity.index, dummyPath)
+		end 		
+		
+		invokeServerFunction("sendEntityScriptList", Player().index, "cleverUpdateSystems",
+			result, onUpdateFuncName, ...)
+		return
+	end
+	
+	local unInstallList = {}
+	local installList = {}
+	local scriptIndex = 1
+	local scriptPath = scripts[scriptIndex]
+	for currentIndex, mapData in pairsSortedByStart(activeMap) do
+		while scriptPath and scriptPath:sub(0, #systemPath) ~= systemPath do
+			scriptIndex = scriptIndex + 1 -- skipping index if busy
+			scriptPath = scripts[scriptIndex]
+		end
+		if scriptPath then -- installed system -- check the map
+			
+		else -- empty point
+			
+		end
+	end
+	-- TODO install on the map :)
+	
+	
+	-- sync data with server
+	isInputCooldown = false
+end ]]
+
 -- uninstall systems that are not in template and try to install missing from inventory
 function applyTemplate(templateList) -- client side
 	-- checks is template length < slot count, or use sub template	
@@ -486,13 +560,13 @@ end
 function checkSystemsByTemplate(templateList) -- client side
 	-- chatMessage("checkSystemsByTemplate")	
 	local entity = Entity()
-	local fillIndex, dummiesTotal = fillEmptyWithDummies(entity)	
+	local scripts = entity:getScripts()
+	local fillIndex, dummiesTotal = fillEmptyWithDummies(scripts) -- TODO must to be the script list from server
 	local installedSystems = {}
 	local notInstalledList = tableCopy(templateList)
 	local uninstalledList = {}
 	local lastByPath = {}
 	local es, seed, er, rarity
-	local scripts = entity:getScripts()
 	for i, s in pairs(scripts) do
 		-- work only with scripts from systems folder
 		if s:sub(0, #systemPath) == systemPath then
@@ -536,8 +610,8 @@ function checkSystemsByTemplate(templateList) -- client side
 	return installedSystems, notInstalledList
 end
 
-function fillEmptyWithDummies(entity)
-	local scripts = entity:getScripts() -- TODO must to be the script list from server
+function fillEmptyWithDummies(scripts)
+	local entity = Entity()
 	local fillToIndex = 0
 	local countByPath = {}
 	for i, s in pairs(scripts) do -- prepare countByPath
