@@ -127,7 +127,7 @@ function updateClient(timeStep)
 	if interactionPossible(Player().index) then	
 		local keyboard =  Keyboard()
 		if keyboard:keyPressed("left alt") then
-			for i=1, totalTemplates do
+			for i=0, totalTemplates do
 				if keyboard:keyDown(tostring(i)) then
 					onKeyboardInput(i)
 				end
@@ -137,6 +137,12 @@ function updateClient(timeStep)
 end
 
 function onKeyboardInput(inputIndex)
+	if inputIndex == 0 then -- clear
+		chatMessage(MessageType.Whisp, "SystemControl: clear command activated.")
+		onClearButton()
+		return
+	end	
+	-- select template
 	if isInputCooldown then return end -- blocks user input
 	isInputCooldown = true
 	chatMessage(MessageType.Whisp, "SystemControl: apply template #"..tostring(inputIndex))
@@ -389,6 +395,7 @@ function onClearButton()
 	isInputCooldown = true 
 	toInventory(getFaction(), getSystems())
 	activeSystems = {}
+	dirtySystemCount = 0
 	invokeServerFunction("restore", secure()) -- share with server
 	isInputCooldown = false
 	isNeedRefresh = true
