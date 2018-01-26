@@ -22,7 +22,7 @@ local MaxMessageLength = 500
 local MessageType = { Normal=0, Error=1, Warning=2, Information=3, Whisp=4}
 
 local isInputCooldown = false -- blocks user input
-local isNeedRefresh = false
+local isNeedRefresh = true
 local mainWindow = nil
 local systemIcons = {}
 local buttonToLine = {}
@@ -105,7 +105,7 @@ function restore(values)
 		activeSystems[i] =  SystemUpgradeTemplate(systemData["script"],
 			Rarity(systemData["rarity"]), Seed(systemData["seed"]))
 	end
-	dirtySystemCount = data["dirtySystemCount"] or dirtySystemCount
+	dirtySystemCount = values["dirtySystemCount"] or dirtySystemCount
 	-- restore templates data
 	for t=1, totalTemplates do
 		systemTemplates[t] = {}
@@ -224,11 +224,14 @@ function initUI()
 end
 
 function onShowWindow()
-	-- reinstall current systems to get activeList
-	-- TODO: get active list without reinstall
-	activeSystems = {}
-	local systemList = getSystems() --get current list
-	installSystems(systemList) --reinstall current
+	if dirtySystemCount ~= 0 then -- will update activeSystems
+		print("dirtySystemCount:", dirtySystemCount)
+		-- TODO: get active list without reinstall
+		activeSystems = {}
+		dirtySystemCount = 0
+		local systemList = getSystems() -- get current list, this will uninstall all
+		installSystems(systemList) -- reinstall current
+	end
 end
 
 function createUISystemList(window, posVector, size, count, padding, borderWidth)
@@ -452,6 +455,7 @@ function applyTemplate(templateList) -- client side
 	print("----templateList:", systemListInfo(installList))
 	
 	activeSystems, installList = checkSystemsByTemplate(installList)
+	dirtySystemCount = 0
 	print("already in activeSystems:", systemListInfo(activeSystems))
 	print("installList count:", tableCount(installList), systemListInfo(installList))
 	if tableCount(installList) > 0 then
@@ -699,10 +703,11 @@ function installSystems(scriptList, systemList) -- client side
 		end
 	end
 	
-	print("installSystems done, activeSystems:", systemListInfo(activeSystems))
+	dirtySystemCount = 0
 	invokeServerFunction("restore", secure()) -- share state with server
 	isInputCooldown = false
 	isNeedRefresh = true
+	print("installSystems done, activeSystems:", systemListInfo(activeSystems))
 end
 
 function install(entityIndex, script, seed_int32, rarity)
