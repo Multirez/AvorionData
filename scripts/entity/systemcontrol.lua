@@ -7,6 +7,7 @@ require("debug")
 --require("class")
 
 local activeSystems = {}
+local dirtySystems = 100500 -- unaccounted systems, need to update activeSystems
 local systemTemplates = {}
 local usePlayerInventory = true
 local totalTemplates = 5
@@ -386,10 +387,45 @@ function syncWithClient(playerIndex) -- server side
 end
 
 -- recalculate available slots and remove extra updates
-function checkSystemsByProcessing()
+function checkSystemsByProcessing(serverScripts) -- client side
+	if not serverScripts then
+		invokeServerFunction("sendEntityScriptList", Player().index, "checkSystemsByProcessing")
+		return
+	end
+	isInputCooldown = true
+	-- calc the number of slots
 	local entity = Entity()
 	upgradeSlotCount = processPowerToUpgradeCount(getProcessPower(entity))
-	-- TODO remove last if not enough slots
+	-- count upgrades
+	local entityUpgradesCount = 0
+	for i, s in pairs(serverScripts) do
+		if s:sub(0, #systemPath) == systemPath then 
+			entityUpgradesCount = entityUpgradesCount + 1
+		end		
+	end
+	
+	local totalExtraUpgrades = entityUpgradesCount - upgradeSlotCount
+	dirtySystems = entityUpgradesCount - tableCount(activeSystems)
+	if totalExtraUpgrades > 0 then -- remove last if not enough slots	
+		local totalToRemove = math.min(tableCount(activeSystems), totalExtraUpgrades)
+		if totalToRemove > 0 then
+			local removeIter = pairsByKeys(activeSystems, function(a, b) return a > b end)
+			local inventoryList = {}
+			for i=1, totalToRemove do
+				sIndex, system = removeIter()
+				inventoryList[sIndex] = system
+				unInstallByIndex(entity.index, sIndex)							
+				activeSystems[sIndex] = nil	
+			end
+			toInventory(getFaction(), inventoryList)
+			invokeServerFunction("restore", secure()) -- share data with server	
+			chatMessage(MessageType.Whisp, 
+				"SytemControl: Extra systems was removed, count:", totalToRemove)
+		end
+	end	
+	
+	isInputCooldown = false
+	isNeedRefresh = true
 end
 
 -- returns player or allience faction index based on usePlayerInventory value.
@@ -444,7 +480,7 @@ function checkSystemsByTemplate(templateList) -- client side
 				fillIndex = fillIndex + 1
 				while scripts[fillIndex] do fillIndex = fillIndex + 1 end -- to empty
 				installedSystems[fillIndex] = lastByPath[s].system
-				installSystems[lastByPath[s].index] = nil
+				installedSystems[lastByPath[s].index] = nil
 			end
 			lastByPath[s] = nil			
 			es, rarity = entity:invokeFunction(s, "getRarity")			
@@ -595,12 +631,23 @@ end
 -- UNINSTALL an upgrade with the valid name
 function unInstall(entityIndex, script) 
 	if onClient() then
-		Entity(entityIndex):removeScript(script) -- uninsttall on client too, to not wait for server sync
+		-- Entity(entityIndex):removeScript(script) -- uninsttall on client too, to not wait for server sync
 		invokeServerFunction("unInstall", entityIndex, script)
 		return
 	end
 	
 	Entity(entityIndex):removeScript(script)
+end
+
+-- UNINSTALL an upgrade by script index
+function unInstallByIndex(entityIndex, scriptIndex) 
+	if onClient() then
+		print("unInstallByIndex, scriptIndex:", scriptIndex)
+		invokeServerFunction("unInstallByIndex", entityIndex, scriptIndex)
+		return
+	end
+	print("unInstallByIndex, scriptIndex:", scriptIndex)
+	Entity():removeScript(tonumber(scriptIndex))
 end
 
 -- for share server entity scripts with client
