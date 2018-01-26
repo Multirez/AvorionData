@@ -9,6 +9,7 @@ require("debug")
 local activeSystems = {}
 local dirtySystemCount = 100500 -- number of the unaccounted systems, need to update activeSystems
 local systemTemplates = {}
+local isCheckSystemsSheduled = false
 local usePlayerInventory = true
 local totalTemplates = 5
 local slotRequirements = {0, 51, 128, 320, 800, 2000, 5000, 12500, 19764, 
@@ -47,8 +48,11 @@ function initialize()
 	end
 end
 
-function onRemove()	
-	toInventory(getFaction(), getSystems()) -- need to clear current systems, that was be uncorect registered
+function onRemove()
+	print("onRemove, invetory faction:", getFaction())
+	if onServer() then
+		toInventory(getFaction(), getSystems()) -- need to clear current systems, that was be uncorect registered
+	end
 end
 
 function secure()
@@ -142,10 +146,22 @@ function onSystemsChanged(shipIndex)
 	local entity = Entity()
 	if shipIndex == entity.index then 
 		print("onSystemsChanged")
-		deferredCallback(1.0, "broadcastInvokeClientFunction", "checkSystemsByProcessing")		
+		if not isCheckSystemsSheduled then
+			isCheckSystemsSheduled = true
+			deferredCallback(1.0, "delayedSystemCheck")
+		end
 	end	
 end
 
+function delayedSystemCheck()
+	isCheckSystemsSheduled = false
+	player = Player(Entity():getPilotIndices())
+	if player then
+		invokeClientFunction(player, "checkSystemsByProcessing", Entity():getScripts())
+	else 
+		dirtySystemCount = dirtySystemCount + 1 -- sets state to "dirty"
+	end
+end
 
 ---- UI ----
 -- if this function returns false, the script will not be listed in the interaction window on the client,
@@ -442,10 +458,8 @@ function getFaction()
 		return Player().index
 	end
 	-- server call for player inventory
-	if callingPlayer then 
-		return callingPlayer.index
-	end		
-	return Entity().factionIndex
+	local playerIndex = Entity():getPilotIndices()	
+	return playerIndex or Entity().factionIndex
 end
 
 -- uninstall systems that are not in template and try to install missing from inventory
@@ -608,7 +622,7 @@ end
 
 -- UNINSTALL all upgrades, returns table<int, SystemUpgradeTemplate>
 -- also remove dummies scripts
-function getSystems() -- client side
+function getSystems()
 	local entity = Entity()
 	local scripts = entity:getScripts()
 	local seed, rarity
@@ -725,7 +739,7 @@ function toInventory(factionIndex, systemList)
 		invokeServerFunction("toInventory", factionIndex, systemList)
 		return
 	end
-
+	print("toInventory, faction:", Faction(factionIndex), tableInfo(systemList))
 	inventory = Faction(factionIndex):getInventory()
 	for i, v in pairs(systemList) do
 		v.favorite = true
