@@ -29,14 +29,16 @@ function initialize()
 	for i=1, totalTemplates do
 		systemTemplates[i] = {}
 	end	
-	
+	print("all templates init to {}")
 	local entity = Entity()
 	upgradeSlotCount = processPowerToUpgradeCount(getProcessPower(entity))
 	if onServer() then	
 		entity:registerCallback("onSystemsChanged", "onSystemsChanged")
+		print("register callback onSystemsChanged")
 		chatMessage(ChatMessageType.Whisp, "System controll was initialized.")
 	else -- on client
-		invokeServerFunction("syncWithClient", Player().index)
+		print("client request syncWithClient")
+		invokeServerFunction("syncWithClient", Player().index)			
 	end
 end
 
@@ -52,27 +54,38 @@ end
 -- be numbers, strings or other tables. Values that aren't of the above types will be converted
 -- to nil and an error message will be printed.
 function secure()
+	print("secure(), isClient", onClient())
 	-- store activeSystems data
 	local data = {}
 	local systems = {}
 	local systemData = {}
-	for i, system in pairs(activeSystems) do
-		systemData = {}
-		systemData["script"] = system.script
-		systemData["rarity"] = system.rarity.value
-		systemData["seed"] = system.seed.value
-		systems[i] = systemData
+	for k, system in pairs(activeSystems) do
+		if k and system and system.seed and system.rarity then
+			systemData = {}
+			systemData["script"] = system.script
+			systemData["rarity"] = system.rarity.value
+			systemData["seed"] = system.seed.value
+			systems[k] = systemData
+		else
+			print("Error! secure: activeSystems containe row without system data.",
+				"scriptKey:", k)
+		end		
 	end
 	data["activeSystems"] = systems	
 	-- store templates data
 	for t=1, totalTemplates do
 		systems = {}
-		for i, system in pairs(systemTemplates[t]) do
-			systemData = {}
-			systemData["script"] = system.script
-			systemData["rarity"] = system.rarity.value
-			systemData["seed"] = system.seed.value
-			systems[i] = systemData
+		for k, system in pairs(systemTemplates[t]) do
+			if k and system and system.seed and system.rarity then
+				systemData = {}
+				systemData["script"] = system.script
+				systemData["rarity"] = system.rarity.value
+				systemData["seed"] = system.seed.value
+				systems[k] = systemData
+			else
+				print("Error! secure: Template containe row without system data.",
+					"templateIndex:", t, "scriptKey:", k)
+			end
 		end
 		data[tostring(t)] = systems
 	end
@@ -85,7 +98,8 @@ end
 -- Called to restore previously secured values for the script. Receives the values that were gathered
 -- from the last called to the secure() function. This function is called when the object is read
 -- from disk and restored, after initialize() was called.
-function restore(values)	
+function restore(values)
+	print("restore(), isClient", onClient())	
 	if type(values) ~= "table" then
 		return
 	end
@@ -109,7 +123,25 @@ function restore(values)
 end
 
 
-function onKeyboardEvent(key, pressed) 
+function updateClient(timeStep)	
+	local keyboard =  Keyboard() -- Keyboard is only available on the client side
+
+    if keyboard:keyDown("left ctrl") or keyboard:keyDown("right ctrl") then
+    end
+	if keyboard:keyUp("left ctrl") or keyboard:keyUp("right ctrl") then
+    end
+    if keyboard:keyDown("left shift") or keyboard:keyDown("right shift") then
+    end
+	if keyboard:keyUp("left shift") or keyboard:keyUp("right shift") then
+    end
+    if keyboard:keyDown("left alt") or keyboard:keyDown("right alt") then
+		print("left alt down")
+    end
+	if keyboard:keyUp("left alt") or keyboard:keyUp("right alt") then
+    end
+end
+
+function onKeyboardEvent(key, pressed)
 	if key == 9 then -- Tab key
 		isTabPressed = pressed
 	end
@@ -149,8 +181,10 @@ local isInputCooldown = false -- blocks user input
 local systemIcons = {}
 local buttonToLine = {}
 local usePlayerInventoryCheckBox
+local isNeedRefresh = false
 
 function initUI()
+	print("initUI")
     local size = vec2(960, 600)
     local res = getResolution()
 
@@ -172,7 +206,7 @@ function initUI()
 	local pos = vec2(4*margin, 2*margin)
 	local label, button
 	local hotButtonName	= "Tab"
-	local maxSystemCount = table.count(slotRequirements)
+	local maxSystemCount = tableCount(slotRequirements)
 	local labelFontSize = math.floor(labelHeight*0.6)
 	--local getTempList = function() r = {} for n = 1, 15 do table.insert(r, n) end return r end
 	--chatMessage(tableInfo(getTempList()))
@@ -205,7 +239,7 @@ function initUI()
 		
 		systemIcons[i] = createUISystemList(window, pos, iconSize, maxSystemCount)
 		pos.y = pos.y + iconSize + 2*margin
-	end	
+	end
 end
 
 function onShowWindow()
@@ -226,34 +260,40 @@ function createUISystemList(window, posVector, size, count, padding, borderWidth
 	local border = vec2(borderWidth, borderWidth)
 	local result = {}
 	for i=1, count do
-		result[i] = {}
-		result[i]["border"], result[i]["frame"] = 
-			createBorder(window, Rect(pos, pos + buttonSize + border), borderWidth - 1)
-		result[i]["picture"] = window:createPicture(Rect(pos + border, pos + buttonSize), "")
-		result[i]["picture"].isIcon = true
-		--picture.picture = "data/textures/icons/circuitry.png"
+		local systemIcon = {}
+		systemIcon["border"], systemIcon["frame"] = createBorder(window, 
+			Rect(pos, pos + buttonSize + border), borderWidth - 1, ColorRGB(0, 0, 0))
+		systemIcon["picture"] = window:createPicture(Rect(pos + border, pos + buttonSize), "")
+		systemIcon["picture"].isIcon = true
 		pos.x = pos.x + size + padding
+		
+		table.insert(result, i, systemIcon)
 	end
 	
 	return result
 end
 
 function createBorder(uiContainer, posRect, borderWidth, borderColor)
-	borderColor = borderColor or ColorRGB(1, 1, 1)
+	borderColor = borderColor or ColorRGB(0.1, 0.1, 0.1)
 	
 	local border = vec2(borderWidth, borderWidth)
 	local borderFrame = uiContainer:createFrame(posRect)
-	borderFrame.backgroundColor = ColorRGB(1, 1, 1)
+	borderFrame.backgroundColor = borderColor
 	local backFrame = uiContainer:createFrame(Rect(posRect.topLeft + border, posRect.bottomRight - border))
-	backFrame.backgroundColor = ColorRGB(0.1, 0.1, 0.1)
+	backFrame.backgroundColor = ColorARGB(0.95, 0.1, 0.1, 0.1)
 	
 	return borderFrame, backFrame
 end
 
+-- Client Function: This function is only called on the client.
+function updateUI() 	
+	if isNeedRefresh then refreshUI() end
+end
+
 -- this function gets called whenever the ui window gets rendered, AFTER the window was rendered (client only)
-function renderUI()
-	-- draw tooltip
-	-- if mainWindow.visible then -- render UI calls only if window is visible
+function renderUI()	
+	if mainWindow.visible then -- render UI calls only if window is visible
+		-- draw tooltip
 		for l=0, totalTemplates do
 			for _, icon in pairs(systemIcons[l]) do
 				if icon["tooltip"] and icon["border"].mouseOver then
@@ -262,7 +302,7 @@ function renderUI()
 				end
 			end
 		end
-	-- end
+	end
 end
 
 ---- UI callbacks ----
@@ -300,9 +340,9 @@ function onUpdateButton(button)
 	isInputCooldown = true
 	local lineIndex = buttonToLine[button.index]	
 	chatMessage(MessageType.Whisp, "Update button pressed, template index: ", lineIndex)
-	systemTemplates[lineIndex] = table.copy(activeSystems) -- new table
+	systemTemplates[lineIndex] = tableCopy(activeSystems) -- new table
 	invokeServerFunction("restore", secure()) -- share with server
-	refreshUI()
+	isNeedRefresh = true
 end
 
 function onClearButton()
@@ -311,7 +351,7 @@ function onClearButton()
 	toInventory(getFaction(), getSystems())
 	activeSystems = {}
 	invokeServerFunction("restore", secure()) -- share with server
-	refreshUI()
+	isNeedRefresh = true
 end
 
 ---- UI update ----
@@ -323,34 +363,38 @@ function refreshUI()
 	end
 	
 	isInputCooldown = false
+	isNeedRefresh = false
 end
 
 function updateUISystemList(iconList, systemList, availableTotal)
 	local iconIndex = 1
 	local iconPicture, iconBorder	
-	for i, system in pairsByKeys(systemList) do		
-		iconPicture = iconList[iconIndex].picture
+	for _, system in pairsByKeys(systemList) do		
+		iconPicture = iconList[iconIndex].picture		
 		iconPicture.picture = system.icon
-		iconPicture.color = system.rarity.color		
-		iconList[iconIndex]["tooltip"] = system.tooltip
-		
+		iconPicture.color = system.rarity.color
+		iconPicture.visible = true
+			
 		iconBorder = iconList[iconIndex].border
 		if iconIndex > availableTotal then
 			iconBorder.backgroundColor = ColorRGB(0, 0, 0)
 		else
 			iconBorder.backgroundColor = system.rarity.color
-		end	
-			
+		end		
+		
+		iconList[iconIndex].tooltip = system.tooltip	
+		
 		iconIndex = iconIndex + 1
 	end
 	
 	for i=iconIndex, #iconList do 
-		iconList[i].picture.picture = ""
+		iconList[i].picture.visible = false
 		if i > availableTotal then
 			iconList[i].border.backgroundColor = ColorRGB(0, 0, 0)
 		else
 			iconList[i].border.backgroundColor = ColorRGB(0.8, 0.8, 0.8)
 		end
+		iconList[i].tooltip = nil
 	end
 end
 
@@ -358,6 +402,7 @@ end
 ---- Functions ----
 -- share settings and templates with player
 function syncWithClient(playerIndex) -- server side
+	print("send to client secure data")
 	invokeClientFunction(Player(playerIndex), "restore", secure())
 end
 
@@ -386,17 +431,17 @@ end
 -- uninstall systems that are not in template and try to install missing from inventory
 function applyTemplate(templateList) -- client side
 	-- checks is template length < slot count, or use sub template	
-	local installList = table.sub(templateList, 1 , upgradeSlotCount)	
+	local installList = tableSub(templateList, 1 , upgradeSlotCount)	
 	print("----templateList:", systemListInfo(installList))
 	
 	activeSystems, installList = checkSystemsByTemplate(installList)
 	print("already in activeSystems:", systemListInfo(activeSystems))
-	print("installList count:", table.count(installList), systemListInfo(installList))
-	if table.count(installList) > 0 then
+	print("installList count:", tableCount(installList), systemListInfo(installList))
+	if tableCount(installList) > 0 then
 		installFromInventory(installList)
 	else		
 		invokeServerFunction("restore", secure()) -- share state with server
-		refreshUI()
+		isNeedRefresh = true
 	end
 end
 
@@ -405,7 +450,7 @@ function checkSystemsByTemplate(templateList) -- client side
 	local entity = Entity()
 	local fillIndex, dummiesTotal = fillEmptyWithDummies(entity)	
 	local installedSystems = {}
-	local notInstalledList = table.copy(templateList)
+	local notInstalledList = tableCopy(templateList)
 	local uninstalledList = {}
 	local lastByPath = {}
 	local es, seed, er, rarity
@@ -427,7 +472,7 @@ function checkSystemsByTemplate(templateList) -- client side
 			if es == 0 and er == 0 then
 				-- check is use or uninstall
 				local systemUpgrade = SystemUpgradeTemplate(s, rarity, seed)
-				local isRemain, tIndex = table.containe(notInstalledList, systemUpgrade, isSystemsEqual)
+				local isRemain, tIndex = tableContaine(notInstalledList, systemUpgrade, isSystemsEqual)
 				if isRemain then
 					notInstalledList[tIndex] = nil
 					installedSystems[i] = systemUpgrade
@@ -446,7 +491,7 @@ function checkSystemsByTemplate(templateList) -- client side
 	for i=1, dummiesTotal do
 		unInstall(entity.index, dummyPath)
 	end
-	if table.count(uninstalledList) > 0 then -- return uninstalled systems to faction inventory
+	if tableCount(uninstalledList) > 0 then -- return uninstalled systems to faction inventory
 		toInventory(getFaction(), uninstalledList) 
 	end
 	
@@ -599,11 +644,11 @@ function installSystems(scriptList, systemList) -- client side
 			print("Error! installSystems: systemList can't be nil.")
 			
 			invokeServerFunction("restore", secure()) -- share state with server
-			refreshUI()
+			isNeedRefresh = true
 			return
 		end
 	end
-	if table.count(systemList) > 0 then	
+	if tableCount(systemList) > 0 then	
 		if not scriptList then	
 			-- chatMessage("installSystems: Try to get server script list.")
 			invokeServerFunction("sendEntityScriptList", Player().index, "installSystems", systemList)
@@ -624,9 +669,9 @@ function installSystems(scriptList, systemList) -- client side
 		end
 	end
 	
-	print("activeSystems:", systemListInfo(activeSystems))
+	print("installSystems done, activeSystems:", systemListInfo(activeSystems))
 	invokeServerFunction("restore", secure()) -- share state with server
-	refreshUI()
+	isNeedRefresh = true
 end
 
 function install(entityIndex, script, seed_int32, rarity)
@@ -661,14 +706,14 @@ function getProcessPower(entity)
 end
 
 function processPowerToUpgradeCount(processingPower)
-	print("process power:", processingPower)
 	for i, requiredPP in ipairs(slotRequirements) do
-		if requiredPP > processingPower then
+		if requiredPP > processingPower then			
+			print("process power:", processingPower, "slots:", (i - 1))
 			return (i - 1)
 		end
 	end
 	
-	return table.count(slotRequirements)
+	return tableCount(slotRequirements)
 end
 
 function isSystemsEqual(systemA, systemB)
@@ -678,7 +723,7 @@ function isSystemsEqual(systemA, systemB)
 		systemA.rarity == systemB.rarity)
 end
 
-function table.containe(tb, value, equalityFunc)
+function tableContaine(tb, value, equalityFunc)
 	if not equalityFunc then
 		equalityFunc = function(a,b) return a==b end
 	end
@@ -690,7 +735,7 @@ function table.containe(tb, value, equalityFunc)
 	return false
 end
 
-function table.sub(tb, firstIndex, lastIndex)
+function tableSub(tb, firstIndex, lastIndex)
 	local index = 0
 	local result = {}
 	for k, v in pairs(tb) do 
@@ -703,7 +748,7 @@ function table.sub(tb, firstIndex, lastIndex)
 	return result
 end
 
-function table.copy(tb)
+function tableCopy(tb)
 	local result = {}
 	for k, v in pairs(tb) do 
 		result[k] = v
@@ -711,7 +756,7 @@ function table.copy(tb)
 	return result
 end
 
-function table.count(tb)
+function tableCount(tb)
 	local count = 0
 	for _ in pairs(tb) do 
 		count = count + 1
@@ -767,8 +812,15 @@ end
 function systemListInfo(systemList)
 	result = ""
 	for k, s in pairs(systemList) do
-		result = result .. "\n" .. tostring(k) .. " : " .. s.script ..
-			" rarity "..tostring(s.rarity).." seed "..tostring(s.seed.value)
+		if k and s and s.seed then 
+			result = result .. "\n" .. tostring(k) .. " : " .. s.script ..
+				" rarity "..tostring(s.rarity).." seed "..tostring(s.seed.value)
+		else
+			result = result.."Error! systemListInfo: systemList containe row without system data."..
+				" scriptKey: "..tostring(k)
+			print("Error! systemListInfo: systemList containe row without system data.",
+				"scriptKey:", k)
+		end
 	end	
 	return result
 end
@@ -826,7 +878,7 @@ end
 local MaxMessageLength = 500
 function chatMessage(messageType, ...)
 	local message = ""
-	if not table.containe(MessageType, messageType) then
+	if not tableContaine(MessageType, messageType) then
 		message = tostring(messageType)
 		messageType = MessageType.Normal
 	end
