@@ -7,7 +7,7 @@ require("debug")
 --require("class")
 
 local activeSystems = {}
-local dirtySystems = 100500 -- unaccounted systems, need to update activeSystems
+local dirtySystemCount = 100500 -- number of the unaccounted systems, need to update activeSystems
 local systemTemplates = {}
 local usePlayerInventory = true
 local totalTemplates = 5
@@ -69,7 +69,8 @@ function secure()
 				"scriptKey:", k)
 		end		
 	end
-	data["activeSystems"] = systems	
+	data["activeSystems"] = systems		
+	data["dirtySystemCount"] = dirtySystemCount
 	-- store templates data
 	for t=1, totalTemplates do
 		systems = {}
@@ -104,6 +105,7 @@ function restore(values)
 		activeSystems[i] =  SystemUpgradeTemplate(systemData["script"],
 			Rarity(systemData["rarity"]), Seed(systemData["seed"]))
 	end
+	dirtySystemCount = data["dirtySystemCount"] or dirtySystemCount
 	-- restore templates data
 	for t=1, totalTemplates do
 		systemTemplates[t] = {}
@@ -405,7 +407,7 @@ function checkSystemsByProcessing(serverScripts) -- client side
 	end
 	
 	local totalExtraUpgrades = entityUpgradesCount - upgradeSlotCount
-	dirtySystems = entityUpgradesCount - tableCount(activeSystems)
+	dirtySystemCount = entityUpgradesCount - tableCount(activeSystems)
 	if totalExtraUpgrades > 0 then -- remove last if not enough slots	
 		local totalToRemove = math.min(tableCount(activeSystems), totalExtraUpgrades)
 		if totalToRemove > 0 then
