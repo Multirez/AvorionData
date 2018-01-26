@@ -15,16 +15,20 @@ local slotRequirements = {0, 51, 128, 320, 800, 2000, 5000, 12500, 19764,
 local upgradeSlotCount = nil
 local systemPath = "data/scripts/systems/"
 local dummyPath = "data/scripts/entity/dummy.lua"
+
+local MaxMessageLength = 500
 -- ChatMessageType.Information on client fires attempt to index a nil value, create own enum
 local MessageType = { Normal=0, Error=1, Warning=2, Information=3, Whisp=4}
 
+local isInputCooldown = false -- blocks user input
+local isNeedRefresh = false
+local mainWindow = nil
+local systemIcons = {}
+local buttonToLine = {}
+local usePlayerInventoryCheckBox = nil
+
+
 ---- API functions ----
--- This function is always the very first function that is called in a script, and only once during
--- the lifetime of the script. The function is always called on the server first, before client
--- instances are available, so invoking client functions will never work. This function is both
--- called when a script gets newly attached to an object, and when the object is loaded from the
--- database during a load from disk operation. During a load from disk operation, no parameters
--- are passed to the function. 
 function initialize()
 	for i=1, totalTemplates do
 		systemTemplates[i] = {}
@@ -42,17 +46,10 @@ function initialize()
 	end
 end
 
--- Called when the script is about to be removed from the object, before the removal. 
 function onRemove()	
 	toInventory(getFaction(), getSystems()) -- need to clear current systems, that was be uncorect registered
 end
 
--- Called to secure values from the script. This function is called when the object is unloaded
--- from the server. It's called at other times as well to refresh data, or when objects are copied
--- or during regular saves. The table returned by this function will be passed to the restore()
--- function when the object is loaded and read from disk. All values that are in the table must
--- be numbers, strings or other tables. Values that aren't of the above types will be converted
--- to nil and an error message will be printed.
 function secure()
 	print("secure(), isClient", onClient())
 	-- store activeSystems data
@@ -95,9 +92,6 @@ function secure()
 	return data
 end
 
--- Called to restore previously secured values for the script. Receives the values that were gathered
--- from the last called to the secure() function. This function is called when the object is read
--- from disk and restored, after initialize() was called.
 function restore(values)
 	print("restore(), isClient", onClient())	
 	if type(values) ~= "table" then
@@ -122,33 +116,23 @@ function restore(values)
 	usePlayerInventory = values["usePlayerInventory"] or true
 end
 
-
 function updateClient(timeStep)	
 	local keyboard =  Keyboard() -- Keyboard is only available on the client side
 
-    if keyboard:keyDown("left ctrl") or keyboard:keyDown("right ctrl") then
-    end
-	if keyboard:keyUp("left ctrl") or keyboard:keyUp("right ctrl") then
-    end
-    if keyboard:keyDown("left shift") or keyboard:keyDown("right shift") then
-    end
-	if keyboard:keyUp("left shift") or keyboard:keyUp("right shift") then
-    end
-    if keyboard:keyDown("left alt") or keyboard:keyDown("right alt") then
-		print("left alt down")
-    end
-	if keyboard:keyUp("left alt") or keyboard:keyUp("right alt") then
+    if keyboard:keyPressed("left alt") then
+		for i=1, totalTemplates do
+			if keyboard:keyDown(tostring(i)) then
+				onKeyboardInput(i)
+			end
+		end
     end
 end
 
-function onKeyboardEvent(key, pressed)
-	if key == 9 then -- Tab key
-		isTabPressed = pressed
-	end
-	
-	if isTabPressed and key > 48 and key < 60 and pressed then
-		print("Tab +", key - 48, "was pressed.")
-	end
+function onKeyboardInput(inputIndex)
+	if isInputCooldown then return end -- blocks user input
+	isInputCooldown = true
+	chatMessage(MessageType.Whisp, "SystemControl: apply template #"..tostring(inputIndex))
+	applyTemplate(systemTemplates[inputIndex])
 end
 
 function onSystemsChanged(shipIndex)
@@ -158,6 +142,7 @@ function onSystemsChanged(shipIndex)
 		deferredCallback(1.0, "broadcastInvokeClientFunction", "checkSystemsByProcessing")		
 	end	
 end
+
 
 ---- UI ----
 -- if this function returns false, the script will not be listed in the interaction window on the client,
@@ -175,13 +160,6 @@ end
 function getIcon()
     return "data/textures/icons/circuitry.png"
 end
-
-local mainWindow = nil
-local isInputCooldown = false -- blocks user input
-local systemIcons = {}
-local buttonToLine = {}
-local usePlayerInventoryCheckBox
-local isNeedRefresh = false
 
 function initUI()
 	print("initUI")
@@ -205,7 +183,7 @@ function initUI()
 	local padding = 0.25*labelHeight 
 	local pos = vec2(4*margin, 2*margin)
 	local label, button
-	local hotButtonName	= "Tab"
+	local hotButtonName	= "Alt"
 	local maxSystemCount = tableCount(slotRequirements)
 	local labelFontSize = math.floor(labelHeight*0.6)
 	--local getTempList = function() r = {} for n = 1, 15 do table.insert(r, n) end return r end
@@ -250,7 +228,6 @@ function onShowWindow()
 	installSystems(systemList) --reinstall current
 end
 
-local isTabPressed = false
 function createUISystemList(window, posVector, size, count, padding, borderWidth)
 	padding = padding or 6
 	borderWidth = borderWidth or 2
@@ -285,7 +262,50 @@ function createBorder(uiContainer, posRect, borderWidth, borderColor)
 	return borderFrame, backFrame
 end
 
--- Client Function: This function is only called on the client.
+
+---- UI update ----
+function refreshUI()
+	updateUISystemList(systemIcons[0], activeSystems, upgradeSlotCount)
+	
+	for i=1, totalTemplates do
+		updateUISystemList(systemIcons[i], systemTemplates[i], upgradeSlotCount)
+	end
+	
+	isNeedRefresh = false
+end
+
+function updateUISystemList(iconList, systemList, availableTotal)
+	local iconIndex = 1
+	local iconPicture, iconBorder	
+	for _, system in pairsByKeys(systemList) do		
+		iconPicture = iconList[iconIndex].picture		
+		iconPicture.picture = system.icon
+		iconPicture.color = system.rarity.color
+		iconPicture.visible = true
+			
+		iconBorder = iconList[iconIndex].border
+		if iconIndex > availableTotal then
+			iconBorder.backgroundColor = ColorRGB(0, 0, 0)
+		else
+			iconBorder.backgroundColor = system.rarity.color
+		end		
+		
+		iconList[iconIndex].tooltip = system.tooltip	
+		
+		iconIndex = iconIndex + 1
+	end
+	
+	for i=iconIndex, #iconList do 
+		iconList[i].picture.visible = false
+		if i > availableTotal then
+			iconList[i].border.backgroundColor = ColorRGB(0, 0, 0)
+		else
+			iconList[i].border.backgroundColor = ColorRGB(0.8, 0.8, 0.8)
+		end
+		iconList[i].tooltip = nil
+	end
+end
+
 function updateUI() 	
 	if isNeedRefresh then refreshUI() end
 end
@@ -304,6 +324,7 @@ function renderUI()
 		end
 	end
 end
+
 
 ---- UI callbacks ----
 function onUsePlayerInventory()	
@@ -342,6 +363,7 @@ function onUpdateButton(button)
 	chatMessage(MessageType.Whisp, "Update button pressed, template index: ", lineIndex)
 	systemTemplates[lineIndex] = tableCopy(activeSystems) -- new table
 	invokeServerFunction("restore", secure()) -- share with server
+	isInputCooldown = false
 	isNeedRefresh = true
 end
 
@@ -351,51 +373,8 @@ function onClearButton()
 	toInventory(getFaction(), getSystems())
 	activeSystems = {}
 	invokeServerFunction("restore", secure()) -- share with server
-	isNeedRefresh = true
-end
-
----- UI update ----
-function refreshUI()
-	updateUISystemList(systemIcons[0], activeSystems, upgradeSlotCount)
-	
-	for i=1, totalTemplates do
-		updateUISystemList(systemIcons[i], systemTemplates[i], upgradeSlotCount)
-	end
-	
 	isInputCooldown = false
-	isNeedRefresh = false
-end
-
-function updateUISystemList(iconList, systemList, availableTotal)
-	local iconIndex = 1
-	local iconPicture, iconBorder	
-	for _, system in pairsByKeys(systemList) do		
-		iconPicture = iconList[iconIndex].picture		
-		iconPicture.picture = system.icon
-		iconPicture.color = system.rarity.color
-		iconPicture.visible = true
-			
-		iconBorder = iconList[iconIndex].border
-		if iconIndex > availableTotal then
-			iconBorder.backgroundColor = ColorRGB(0, 0, 0)
-		else
-			iconBorder.backgroundColor = system.rarity.color
-		end		
-		
-		iconList[iconIndex].tooltip = system.tooltip	
-		
-		iconIndex = iconIndex + 1
-	end
-	
-	for i=iconIndex, #iconList do 
-		iconList[i].picture.visible = false
-		if i > availableTotal then
-			iconList[i].border.backgroundColor = ColorRGB(0, 0, 0)
-		else
-			iconList[i].border.backgroundColor = ColorRGB(0.8, 0.8, 0.8)
-		end
-		iconList[i].tooltip = nil
-	end
+	isNeedRefresh = true
 end
 
 
@@ -441,6 +420,7 @@ function applyTemplate(templateList) -- client side
 		installFromInventory(installList)
 	else		
 		invokeServerFunction("restore", secure()) -- share state with server
+		isInputCooldown = false
 		isNeedRefresh = true
 	end
 end
@@ -644,6 +624,7 @@ function installSystems(scriptList, systemList) -- client side
 			print("Error! installSystems: systemList can't be nil.")
 			
 			invokeServerFunction("restore", secure()) -- share state with server
+			isInputCooldown = false
 			isNeedRefresh = true
 			return
 		end
@@ -671,6 +652,7 @@ function installSystems(scriptList, systemList) -- client side
 	
 	print("installSystems done, activeSystems:", systemListInfo(activeSystems))
 	invokeServerFunction("restore", secure()) -- share state with server
+	isInputCooldown = false
 	isNeedRefresh = true
 end
 
@@ -723,6 +705,22 @@ function isSystemsEqual(systemA, systemB)
 		systemA.rarity == systemB.rarity)
 end
 
+-- for testing purposes
+function test()
+	
+	--[[ local componentType = ComponentType.Scripts
+	local entity = Entity()
+	print(entity.name, "has", componentType, ":", entity:hasComponent(componentType))
+	if entity:hasComponent(componentType) then		
+	end ]]	
+					
+	--[[ local random = Random(Server().seed)
+	local seed = random:createSeed()
+	local rarity = Rarity(RarityType.Exotic) ]]
+end
+
+
+---- Table ----
 function tableContaine(tb, value, equalityFunc)
 	if not equalityFunc then
 		equalityFunc = function(a,b) return a==b end
@@ -765,22 +763,25 @@ function tableCount(tb)
 	return count
 end
 
--- for testing purposes
-function test()
-	
-	--[[ local componentType = ComponentType.Scripts
-	local entity = Entity()
-	print(entity.name, "has", componentType, ":", entity:hasComponent(componentType))
-	if entity:hasComponent(componentType) then		
-	end ]]	
-					
-	--[[ local random = Random(Server().seed)
-	local seed = random:createSeed()
-	local rarity = Rarity(RarityType.Exotic) ]]
+-- sorted by key enumeration
+function pairsByKeys(t, f)
+	local a = {}
+	for n in pairs(t) do table.insert(a, n) end
+	table.sort(a, f)
+	local i = 0      -- iterator variable
+	local iter = function ()   -- iterator function
+		i = i + 1
+		if a[i] == nil then 
+			return nil
+		else 
+			return a[i], t[a[i]]
+		end
+	end
+	return iter
 end
 
 
----- Utilities ----
+---- Info ---
 -- Returns string class values and meta
 function classInfo(class)
 	local result = "----class info----" .. tableInfo(class)
@@ -858,24 +859,6 @@ function tableInfo(tbl, prefix)
 	return result
 end
 
--- sorted by key enumeration
-function pairsByKeys(t, f)
-	local a = {}
-	for n in pairs(t) do table.insert(a, n) end
-	table.sort(a, f)
-	local i = 0      -- iterator variable
-	local iter = function ()   -- iterator function
-		i = i + 1
-		if a[i] == nil then 
-			return nil
-		else 
-			return a[i], t[a[i]]
-		end
-	end
-	return iter
-end
-
-local MaxMessageLength = 500
 function chatMessage(messageType, ...)
 	local message = ""
 	if not tableContaine(MessageType, messageType) then
