@@ -124,15 +124,16 @@ function restore(values)
 end
 
 function updateClient(timeStep)	
-	local keyboard =  Keyboard() -- Keyboard is only available on the client side
-
-    if keyboard:keyPressed("left alt") then
-		for i=1, totalTemplates do
-			if keyboard:keyDown(tostring(i)) then
-				onKeyboardInput(i)
+	if interactionPossible(Player().index) then	
+		local keyboard =  Keyboard()
+		if keyboard:keyPressed("left alt") then
+			for i=1, totalTemplates do
+				if keyboard:keyDown(tostring(i)) then
+					onKeyboardInput(i)
+				end
 			end
 		end
-    end
+	end
 end
 
 function onKeyboardInput(inputIndex)
@@ -148,7 +149,7 @@ function onSystemsChanged(shipIndex)
 		print("onSystemsChanged")
 		if not isCheckSystemsSheduled then
 			isCheckSystemsSheduled = true
-			deferredCallback(1.0, "delayedSystemCheck")
+			deferredCallback(0.5, "delayedSystemCheck")
 		end
 	end	
 end
@@ -167,13 +168,7 @@ end
 -- if this function returns false, the script will not be listed in the interaction window on the client,
 -- even though its UI may be registered
 function interactionPossible(playerIndex, option)
-
-    local player = Player()
-    if Entity().index == player.craftIndex then
-        return true
-    end
-
-    return false
+    return Entity().index == Player(playerIndex).craftIndex -- only on ship
 end
 
 function getIcon()
@@ -651,7 +646,7 @@ end
 -- UNINSTALL an upgrade with the valid name
 function unInstall(entityIndex, script) 
 	if onClient() then
-		-- Entity(entityIndex):removeScript(script) -- uninsttall on client too, to not wait for server sync
+		Entity(entityIndex):removeScript(script) -- uninsttall on client too
 		invokeServerFunction("unInstall", entityIndex, script)
 		return
 	end
@@ -663,6 +658,7 @@ end
 function unInstallByIndex(entityIndex, scriptIndex) 
 	if onClient() then
 		print("unInstallByIndex, scriptIndex:", scriptIndex)
+		Entity():removeScript(tonumber(scriptIndex))
 		invokeServerFunction("unInstallByIndex", entityIndex, scriptIndex)
 		return
 	end
