@@ -1,3 +1,8 @@
+/*
+/*/
+!/data/
+!/mods/
+
 # Compiled Lua sources
 luac.out
 
