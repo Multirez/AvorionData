@@ -476,6 +476,7 @@ function cleverUpdateSystems(scripts, activeMap, onUpdateFunc, ...) -- client si
 	isCleverUpdateIsRunning = true
 	isInputCooldown = true
 	if type(activeMap) ~= "table" then 
+		print("Clever update: create map")
 		local entity = Entity()
 		local fillIndex, dummiesTotal = fillEmptyWithDummies(scripts)
 		local es, seed, er, rarity, systemUpgrade, isSystem
@@ -523,7 +524,7 @@ function cleverUpdateSystems(scripts, activeMap, onUpdateFunc, ...) -- client si
 			result, onUpdateFunc, ...)
 		return
 	end
-	print("arrangement by activeMap")
+	print("Clever update: arrangement by activeMap")
 	local unInstallList = {}
 	local installList = {}
 	local scriptIndex = 0
@@ -584,14 +585,16 @@ function cleverUpdateSystems(scripts, activeMap, onUpdateFunc, ...) -- client si
 		end
 		currentIndex, mapData = sortedMapIter() -- goto next map data
 	end
-	-- install work
+	print("Clever update: install work")
 	for installIndex, system in pairs(installList) do
 		install(entity.index, system.script, system.seed.int32, system.rarity)
 		activeSystems[installIndex] = system
+		print("Clever update: install", installIndex, "<-", system.script)
 	end
 	local entityIndex = Entity().index
 	for uninstallIndex, system in pairs(unInstallList) do
 		unInstallByIndex(entityIndex, uninstallIndex)
+		print("Clever update: uninstall", uninstallIndex, "X->", system.script)
 	end
 	isNeedRefresh = true
 	
