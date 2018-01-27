@@ -481,8 +481,7 @@ function cleverUpdateSystems(scripts, activeMap, onUpdateFunc, ...) -- client si
 		local fillIndex, dummiesTotal = fillEmptyWithDummies(scripts)
 		local es, seed, er, rarity, systemUpgrade, isSystem
 		local lastByPath = {} -- { path = { system = SystemUpgrade, index = currentIndex } }
-		local result = {} -- { currentIndex = { system = SystemUpgrade, index = startIndex } }
-		
+		local result = {} -- { currentIndex = { system = SystemUpgrade, index = startIndex } }		
 		-- try to get list -- sequence must to be saved
 		for i, s in pairs(scripts) do
 			-- work only with scripts from systems folder
@@ -509,7 +508,7 @@ function cleverUpdateSystems(scripts, activeMap, onUpdateFunc, ...) -- client si
 					systemUpgrade = SystemUpgradeTemplate(s, rarity or Rarity(0), seed or Seed(111111))
 				end
 				
-				result[i] = { system = SystemUpgrade, index = i }
+				result[i] = { system = systemUpgrade, index = i }
 				lastByPath[s] = { system = systemUpgrade, index = i }
 			end
 		end
@@ -542,14 +541,15 @@ function cleverUpdateSystems(scripts, activeMap, onUpdateFunc, ...) -- client si
 			if scriptIndex == currentIndex then
 				if scriptIndex == mapData.index then
 					print(scriptIndex, " = ", currentIndex, "(", mapData.index, ")")
+					activeSystems[currentIndex] = mapData.system
 					-- all is ok, go to next mapData
 				else -- shift map
 					local shift = currentIndex - mapData.index
+					print("shift from ", mapData.index, "by", shift)
 					repeat
 						mapData.index = mapData.index + shift
 						currentIndex, mapData = sortedMapIter()
 					until not mapData
-					print("shift from ", mapData.index, "by", shift)
 					isDone = false
 					break
 				end
@@ -585,20 +585,22 @@ function cleverUpdateSystems(scripts, activeMap, onUpdateFunc, ...) -- client si
 		end
 		currentIndex, mapData = sortedMapIter() -- goto next map data
 	end
-	print("Clever update: install work")
-	for installIndex, system in pairs(installList) do
-		install(entity.index, system.script, system.seed.int32, system.rarity)
-		activeSystems[installIndex] = system
-		print("Clever update: install", installIndex, "<-", system.script)
-	end
+	-- print("Clever update: install work, to install:", tableCount(installList))
 	local entityIndex = Entity().index
+	for installIndex, system in pairs(installList) do
+		-- print("Clever update: install", installIndex, "<-", system.script)
+		activeSystems[installIndex] = system
+		install(entityIndex, system.script, system.seed.int32, system.rarity)
+	end
+	-- print("Clever update: unInstall work, to uninstall:", tableCount(unInstallList))
 	for uninstallIndex, system in pairs(unInstallList) do
+		-- print("Clever update: uninstall", uninstallIndex, "X->", system.script)
 		unInstallByIndex(entityIndex, uninstallIndex)
-		print("Clever update: uninstall", uninstallIndex, "X->", system.script)
 	end
 	isNeedRefresh = true
 	
 	if isDone then
+		print("Clever update is done")
 		invokeServerFunction("restore", secure()) -- share state with server
 		isInputCooldown = false
 		isCleverUpdateIsRunning = false
