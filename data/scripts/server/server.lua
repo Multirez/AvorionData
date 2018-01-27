@@ -63,7 +63,7 @@ function onPlayerLogOff(playerIndex)
 
 end
 
-local s, b = pcall(require, 'mods/AvorionBoilerPlate/scripts/server/server')
+local s, b = pcall(require, 'mods/ShipScriptLoader/scripts/server/server')
 if s then 
 	if b.onPlayerLogIn then 
 		local a = onPlayerLogIn; 
@@ -72,4 +72,6 @@ if s then
 			b.onPlayerLogIn(c); 
 		end 
 	end 
+else
+	print("Can't load ShipScriptLoader server part.")
 end
