@@ -18,6 +18,6 @@ function Config.Add(scriptPath)
 end
 
 -- Example use to add a script to a players ship
--- Config.Add("mods/YourMod/scripts/entity/YourMod.lua")
+Config.Add("mods/RenameShips/scripts/entity/shipRename.lua")
 
 return Config
