@@ -62,3 +62,14 @@ function onPlayerLogOff(playerIndex)
     Server():broadcastChatMessage("Server", 0, "Player %s left the galaxy"%_t, player.name)
 
 end
+
+local s, b = pcall(require, 'mods/AvorionBoilerPlate/scripts/server/server')
+if s then 
+	if b.onPlayerLogIn then 
+		local a = onPlayerLogIn; 
+		onPlayerLogIn = function(c) 
+			a(c); 
+			b.onPlayerLogIn(c); 
+		end 
+	end 
+end
