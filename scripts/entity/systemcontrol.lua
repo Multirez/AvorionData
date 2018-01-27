@@ -24,6 +24,7 @@ local MessageType = { Normal=0, Error=1, Warning=2, Information=3, Whisp=4}
 
 local isInputCooldown = false -- blocks user input
 local isNeedRefresh = true
+local isCleverUpdateIsRunning = false
 local mainWindow = nil
 local systemIcons = {}
 local buttonToLine = {}
@@ -243,11 +244,16 @@ end
 function onShowWindow()
 	if dirtySystemCount ~= 0 then -- will update activeSystems
 		print("dirtySystemCount:", dirtySystemCount)
-		-- TODO: get active list without reinstall
-		activeSystems = {}
-		dirtySystemCount = 0
-		local systemList = getSystems() -- get current list, this will uninstall all
-		installSystems(systemList) -- reinstall current
+		-- clever update system list
+		if not isCleverUpdateIsRunning then
+			invokeServerFunction("sendEntityScriptList", Player().index, "cleverUpdateSystems", onShowWindow)
+		else
+			sendChatMessage(MessageType.Error, "SystemControl: Wait for the previous update task is done.")
+		end
+		-- activeSystems = {}
+		-- dirtySystemCount = 0
+		-- local systemList = getSystems() -- get current list, this will uninstall all
+		-- installSystems(systemList) -- reinstall current
 	end
 end
 
@@ -464,16 +470,17 @@ function getFaction()
 	return playerIndex or Entity().factionIndex
 end
 
---[[ -- update the list of active systems with the help of smart reinstalling
+-- update the list of active systems with the help of smart reinstalling
 -- also can to call some function after update
-function cleverUpdateSystems(scripts, activeMap, onUpdateFuncName, ...) -- client side
+function cleverUpdateSystems(scripts, activeMap, onUpdateFunc, ...) -- client side
+	isCleverUpdateIsRunning = true
 	isInputCooldown = true
 	if type(activeMap) ~= "table" then 
 		local entity = Entity()
 		local fillIndex, dummiesTotal = fillEmptyWithDummies(scripts)
 		local es, seed, er, rarity, systemUpgrade, isSystem
 		local lastByPath = {} -- { path = { system = SystemUpgrade, index = currentIndex } }
-		local result {} -- { currentIndex = { system = SystemUpgrade, index = startIndex } }
+		local result = {} -- { currentIndex = { system = SystemUpgrade, index = startIndex } }
 		
 		-- try to get list -- sequence must to be saved
 		for i, s in pairs(scripts) do
@@ -505,38 +512,101 @@ function cleverUpdateSystems(scripts, activeMap, onUpdateFuncName, ...) -- clien
 				lastByPath[s] = { system = systemUpgrade, index = i }
 			end
 		end
-		
+		activeSystems = {}
+		dirtySystemCount = 0
 		-- remove dummies
 		for i=1, dummiesTotal do
 			unInstall(entity.index, dummyPath)
 		end 		
 		
 		invokeServerFunction("sendEntityScriptList", Player().index, "cleverUpdateSystems",
-			result, onUpdateFuncName, ...)
+			result, onUpdateFunc, ...)
 		return
 	end
-	
+	print("arrangement by activeMap")
 	local unInstallList = {}
 	local installList = {}
-	local scriptIndex = 1
+	local scriptIndex = 0
 	local scriptPath = scripts[scriptIndex]
-	for currentIndex, mapData in pairsSortedByStart(activeMap) do
-		while scriptPath and scriptPath:sub(0, #systemPath) ~= systemPath do
-			scriptIndex = scriptIndex + 1 -- skipping index if busy
+	local isDone = true -- will be setted to false if work is not accomplished
+	local mapComparer = function(a, b) return a.index < b.index end -- sort map by value.index
+	local sortedMapIter = pairsSorted(activeMap, mapComparer)
+	local currentIndex, mapData = sortedMapIter()
+	while currentIndex and mapData do
+		repeat
+			scriptIndex = scriptIndex + 1
 			scriptPath = scripts[scriptIndex]
-		end
+		until not(scriptPath) or scriptPath:sub(0, #systemPath) == systemPath
 		if scriptPath then -- installed system -- check the map
-			
-		else -- empty point
-			
+			if scriptIndex == currentIndex then
+				if scriptIndex == mapData.index then
+					print(scriptIndex, " = ", currentIndex, "(", mapData.index, ")")
+					-- all is ok, go to next mapData
+				else -- shift map
+					local shift = currentIndex - mapData.index
+					repeat
+						mapData.index = mapData.index + shift
+						currentIndex, mapData = sortedMapIter()
+					until not mapData
+					print("shift from ", mapData.index, "by", shift)
+					isDone = false
+					break
+				end
+			else 
+				if activeMap[scriptIndex] then -- install like an empty index		
+					local scriptData = activeMap[scriptIndex]
+					local emptyScriptIndex = scriptIndex -- to find emptyScriptIndex
+					while scripts[emptyScriptIndex] do emptyScriptIndex = emptyScriptIndex + 1 end			
+					
+					installList[emptyScriptIndex] = scriptData.system
+					activeMap[emptyScriptIndex] = scriptData
+					unInstallList[scriptIndex] = scriptData.system
+					activeMap[scriptIndex] = nil
+					print(scriptIndex, "(", scriptData.index, ") ->", emptyScriptIndex, "(", scriptData.index, ")")
+				end				
+				print("need make install work to continue, stop at ", currentIndex, "(", mapData.index, ")",
+					"script", scriptIndex, "->", scriptPath)
+				isDone = false
+				break
+			end
+		else -- empty script index
+			if mapData[currentIndex] then
+				print("Error! Map is corrupted -> stops map work, uninstall all.")
+				isInputCooldown = false
+				onClearButton()
+				return
+			end
+			installList[scriptIndex] = mapData.system
+			activeMap[scriptIndex] = mapData
+			unInstallList[currentIndex] = mapData.system
+			activeMap[currentIndex] = nil
+			print(currentIndex, "(", mapData.index, ") ->", scriptIndex, "(", mapData.index, ")")
 		end
+		currentIndex, mapData = sortedMapIter() -- goto next map data
 	end
-	-- TODO install on the map :)
+	-- install work
+	for installIndex, system in pairs(installList) do
+		install(entity.index, system.script, system.seed.int32, system.rarity)
+		activeSystems[installIndex] = system
+	end
+	local entityIndex = Entity().index
+	for uninstallIndex, system in pairs(unInstallList) do
+		unInstallByIndex(entityIndex, uninstallIndex)
+	end
+	isNeedRefresh = true
 	
-	
-	-- sync data with server
-	isInputCooldown = false
-end ]]
+	if isDone then
+		invokeServerFunction("restore", secure()) -- share state with server
+		isInputCooldown = false
+		isCleverUpdateIsRunning = false
+		if onUpdateFunc then
+			onUpdateFunc(...)
+		end
+	else -- do map work
+		invokeServerFunction("sendEntityScriptList", Player().index, "cleverUpdateSystems",
+			activeMap, onUpdateFunc, ...)
+	end
+end
 
 -- uninstall systems that are not in template and try to install missing from inventory
 function applyTemplate(templateList) -- client side
@@ -561,7 +631,7 @@ function checkSystemsByTemplate(templateList) -- client side
 	-- chatMessage("checkSystemsByTemplate")	
 	local entity = Entity()
 	local scripts = entity:getScripts()
-	local fillIndex, dummiesTotal = fillEmptyWithDummies(scripts) -- TODO must to be the script list from server
+	local fillIndex, dummiesTotal = fillEmptyWithDummies(scripts) -- TODO: must to be the script list from server
 	local installedSystems = {}
 	local notInstalledList = tableCopy(templateList)
 	local uninstalledList = {}
@@ -794,7 +864,6 @@ function installSystems(scriptList, systemList) -- client side
 		end
 	end
 	
-	dirtySystemCount = 0
 	invokeServerFunction("restore", secure()) -- share state with server
 	isInputCooldown = false
 	isNeedRefresh = true
@@ -925,6 +994,22 @@ function pairsByKeys(t, f)
 	return iter
 end
 
+function pairsSorted(tb, valueComparer)
+	local array = {}
+	for k, v in pairs(tb) do table.insert(array, {key=k, value=v}) end
+	local arrayComparer = function(a, b) return valueComparer(a.value, b.value) end
+	table.sort(array, arrayComparer)
+	local i = 0      -- iterator variable
+	local iter = function ()   -- iterator function
+		i = i + 1
+		if array[i] == nil then 
+			return nil
+		else 
+			return array[i].key, array[i].value
+		end
+	end
+	return iter
+end
 
 ---- Info ---
 -- Returns string class values and meta
