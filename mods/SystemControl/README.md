@@ -53,6 +53,7 @@ the checkbox __Use player inventory__(4).
 
 You can use hot keys to apply the required template Alt + #number of template.
 Alt + 0 will remove all installed system upgrades.
+
 Templates do not store upgrades, they just remember which systems should be installed, and try to search 
 for these in the inventory.
 
@@ -83,4 +84,4 @@ If I have one then it will be possible to improve the level of integration with 
 ## Credits
 
 * Dirtyredz for the ShipScriptLoader.
-* Multirez (it's my forum niñkname) for everything else :)
+* Multirez (it's my forum nickname) for everything else :)
