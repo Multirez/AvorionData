@@ -251,7 +251,7 @@ function onShowWindow()
 		print("dirtySystemCount:", dirtySystemCount)
 		-- clever update system list
 		if not isCleverUpdateIsRunning then
-			invokeServerFunction("sendEntityScriptList", Player().index, "cleverUpdateSystems", onShowWindow)
+			invokeServerFunction("sendEntityScriptList", Player().index, "cleverUpdateSystems")
 		else
 			sendChatMessage(MessageType.Error, "SystemControl: Wait for the previous update task is done.")
 		end
@@ -259,6 +259,8 @@ function onShowWindow()
 		-- dirtySystemCount = 0
 		-- local systemList = getSystems() -- get current list, this will uninstall all
 		-- installSystems(systemList) -- reinstall current
+	else
+		invokeServerFunction("sendEntityScriptList", Player().index, "checkActiveList")
 	end
 end
 
@@ -414,6 +416,16 @@ end
 
 
 ---- Functions ----
+function checkActiveList(scripts)
+	print("Check activeSystems start.")
+	for k, v in pairs(activeSystems) do
+		if scripts[k] ~= v.script then
+			print("Error! Check active systems failed. At ", k, "must be", v.script, "but in fact there is", scripts[k])
+		end
+	end
+	print("Check activeSystems complete.")
+end
+
 -- share settings and templates with player
 function syncWithClient(playerIndex) -- server side
 	print("send to client secure data")
@@ -481,6 +493,7 @@ function cleverUpdateSystems(scripts, activeMap, onUpdateFunc, ...) -- client si
 	isCleverUpdateIsRunning = true
 	isInputCooldown = true
 	if type(activeMap) ~= "table" then 
+		if type(activeMap)=="function" then onUpdateFunc = activeMap end
 		print("Clever update: create map")
 		local entity = Entity()
 		local fillIndex, dummiesTotal = fillEmptyWithDummies(scripts)
@@ -501,7 +514,7 @@ function cleverUpdateSystems(scripts, activeMap, onUpdateFunc, ...) -- client si
 				end
 				lastByPath[s] = nil
 				
-				if activeSystems[i] then
+				if false then -- TODO: in future use activeSystems[i] then
 					systemUpgrade = activeSystems[i]
 				else
 					er, rarity = entity:invokeFunction(s, "getRarity")			
@@ -527,6 +540,22 @@ function cleverUpdateSystems(scripts, activeMap, onUpdateFunc, ...) -- client si
 		invokeServerFunction("sendEntityScriptList", Player().index, "cleverUpdateSystems",
 			result, onUpdateFunc, ...)
 		return
+	end
+	
+	print("Check map identity...")
+	local isCorrupted = false
+	for index, mapValue in pairs(activeMap) do
+		if scripts[index] ~= mapValue.system.script then
+			print("Error! active Map is corrupted at", index,
+				"must be:", mapValue.system.script, "but in fact:", scripts[index])
+			isCorrupted = true
+		end
+	end
+	if isCorrupted then
+		activeSystems = getSystems()
+		dirtySystemCount = 0
+		mapData = {}
+		isDone = true
 	end
 	print("Clever update: arrangement by activeMap")
 	local unInstallList = {}
@@ -568,7 +597,8 @@ function cleverUpdateSystems(scripts, activeMap, onUpdateFunc, ...) -- client si
 					activeMap[emptyScriptIndex] = scriptData
 					unInstallList[scriptIndex] = scriptData.system
 					activeMap[scriptIndex] = nil
-					print(scriptIndex, "(", scriptData.index, ") ->", emptyScriptIndex, "(", scriptData.index, ")")
+					print(scriptIndex, "(", scriptData.index, ") ->", 
+						emptyScriptIndex, "(", scriptData.index, ")", scriptData.system.script)
 				end				
 				print("need make install work to continue, stop at ", currentIndex, "(", mapData.index, ")",
 					"script", scriptIndex, "->", scriptPath)
@@ -592,7 +622,7 @@ function cleverUpdateSystems(scripts, activeMap, onUpdateFunc, ...) -- client si
 	end
 	-- print("Clever update: install work, to install:", tableCount(installList))
 	local entityIndex = Entity().index
-	for installIndex, system in pairs(installList) do
+	for installIndex, system in pairsByKeys(installList) do
 		-- print("Clever update: install", installIndex, "<-", system.script)
 		activeSystems[installIndex] = system
 		install(entityIndex, system.script, system.seed.int32, system.rarity)
@@ -825,12 +855,12 @@ end
 -- UNINSTALL an upgrade by script index
 function unInstallByIndex(entityIndex, scriptIndex) 
 	if onClient() then
-		print("unInstallByIndex, scriptIndex:", scriptIndex)
+		-- print("unInstallByIndex, scriptIndex:", scriptIndex)
 		Entity():removeScript(tonumber(scriptIndex))
 		invokeServerFunction("unInstallByIndex", entityIndex, scriptIndex)
 		return
 	end
-	print("unInstallByIndex, scriptIndex:", scriptIndex)
+	-- print("unInstallByIndex, scriptIndex:", scriptIndex)
 	Entity():removeScript(tonumber(scriptIndex))
 end
 
@@ -845,6 +875,10 @@ function sendEntityScriptList(targetPlayerIndex, targetClientFunctionName, ...) 
 	-- chatMessage("sendEntityScriptList: send scripList to", targetClientFunctionName)
 	invokeClientFunction(Player(targetPlayerIndex), targetClientFunctionName, 
 		Entity():getScripts(), ...)
+end
+
+function printEntityScripts(entityIndex) -- server side
+	print("scripts of entity, index:", entityIndex, tableInfo(Entity(entityIndex):getScripts()))
 end
 
 function installSystems(scriptList, systemList) -- client side
