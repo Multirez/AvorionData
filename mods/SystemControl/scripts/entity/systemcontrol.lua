@@ -251,7 +251,7 @@ function onShowWindow()
 		print("dirtySystemCount:", dirtySystemCount)
 		-- clever update system list
 		if not isCleverUpdateIsRunning then
-			invokeServerFunction("sendEntityScriptList", Player().index, "cleverUpdateSystems")
+			invokeServerFunction("sendEntityScriptList", Player().index, "cleverUpdateSystems", "onShowWindow")
 		else
 			sendChatMessage(MessageType.Error, "SystemControl: Wait for the previous update task is done.")
 		end
@@ -489,11 +489,11 @@ end
 
 -- update the list of active systems with the help of smart reinstalling
 -- also can to call some function after update
-function cleverUpdateSystems(scripts, activeMap, onUpdateFunc, ...) -- client side
+function cleverUpdateSystems(scripts, activeMap, onUpdateFuncName, ...) -- client side
 	isCleverUpdateIsRunning = true
 	isInputCooldown = true
 	if type(activeMap) ~= "table" then 
-		if type(activeMap)=="function" then onUpdateFunc = activeMap end
+		if type(activeMap)=="string" then onUpdateFuncName = activeMap end
 		print("Clever update: create map")
 		local entity = Entity()
 		local fillIndex, dummiesTotal = fillEmptyWithDummies(scripts)
@@ -538,7 +538,7 @@ function cleverUpdateSystems(scripts, activeMap, onUpdateFunc, ...) -- client si
 		end 		
 		
 		invokeServerFunction("sendEntityScriptList", Player().index, "cleverUpdateSystems",
-			result, onUpdateFunc, ...)
+			result, onUpdateFuncName, ...)
 		return
 	end
 	
@@ -639,8 +639,9 @@ function cleverUpdateSystems(scripts, activeMap, onUpdateFunc, ...) -- client si
 		invokeServerFunction("restore", secure()) -- share state with server
 		isInputCooldown = false
 		isCleverUpdateIsRunning = false
-		if onUpdateFunc then
-			onUpdateFunc(...)
+		if onUpdateFuncName then
+			print("Try to run function: "..onUpdateFuncName)
+			_G[onUpdateFuncName](...) -- assert(, "error, while try to run function: "..onUpdateFuncName))
 		end
 	else -- do map work
 		invokeServerFunction("sendEntityScriptList", Player().index, "cleverUpdateSystems",
@@ -653,10 +654,28 @@ function applyTemplate(templateList) -- client side
 	-- checks is template length < slot count, or use sub template	
 	local installList = tableSub(templateList, 1 , upgradeSlotCount)	
 	print("----templateList:", systemListInfo(installList))
-	invokeServerFunction("sendEntityScriptList", Player().index, "checkSystemsByTemplate", installList)
+	if dirtySystemCount > 0 then
+		print("dirtySystemCount:", dirtySystemCount,"-> need to update")
+		invokeServerFunction("sendEntityScriptList", Player().index, "cleverUpdateSystems", 
+			"checkSystemsByTemplate", installList)
+	else
+		invokeServerFunction("sendEntityScriptList", Player().index, "checkSystemsByTemplate", installList)
+	end
 end
 
 function checkSystemsByTemplate(scripts, templateList) -- client side
+	if not templateList then -- function called with one argument
+		templateList = scripts
+		scripts = nil		
+		if not templateList then -- error
+			print("Error! checkSystemsByTemplate: templateList can't be nil.")
+			
+			invokeServerFunction("restore", secure()) -- share state with server
+			isInputCooldown = false
+			isNeedRefresh = true
+			return
+		end
+	end
 	-- chatMessage("checkSystemsByTemplate")	
 	local entity = Entity()
 	local fillIndex, dummiesTotal = fillEmptyWithDummies(scripts) -- TODO: must to be the script list from server
