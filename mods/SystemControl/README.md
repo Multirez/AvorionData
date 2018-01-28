@@ -3,6 +3,8 @@
 The mod for the Avorion game (http://store.steampowered.com/app/445220/Avorion/), allows player to create 
 the templates (sets) of upgrades for ship systems and quickly switch its from one to another.
 
+## Reasons
+
 For sure you had to open the menu of upgrades many times and rearrange the same system upgrades, 
 especially for me it is relevant in the later stages of the game, when the ship has more than 10 installed 
 systems. I switch them again and again, not because I got new ones, but because I want to get the most out of 
@@ -21,7 +23,7 @@ to use the player's inventory when installing or removing improvements. With the
 checkbox you can handle it or SystemControl use the inventory of the ship fraction or the player's inventory 
 even if the ship belongs to the alliance.
 
-## DOWNLOAD
+## Download
 
 ## Installation
 
@@ -44,10 +46,11 @@ Install desired upgrades through the standard interface and press an upgrade ico
 the SystemControl window.
 
 The topmost line (1) shows the current systems installed on the ship, the other lines show your templates
-saved earlier. [Update](2) button will replace the template by the current list of upgrades.
-The [Apply](3) button calls the SystemControl to find and install the upgrades according the tamplate. 
+saved earlier. __Update__(2) button will replace the template by the current list of upgrades.
+The __Apply__(3) button calls the SystemControl to find and install the upgrades according the tamplate. 
 Search will be made in the player's inventory or ship's faction, depending on the status of 
-the checkbox [Use player inventory](4).
+the checkbox __Use player inventory__(4).
+
 You can use hot keys to apply the required template Alt + #number of template.
 Alt + 0 will remove all installed system upgrades.
 Templates do not store upgrades, they just remember which systems should be installed, and try to search 
