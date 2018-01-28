@@ -653,31 +653,19 @@ function applyTemplate(templateList) -- client side
 	-- checks is template length < slot count, or use sub template	
 	local installList = tableSub(templateList, 1 , upgradeSlotCount)	
 	print("----templateList:", systemListInfo(installList))
-	
-	activeSystems, installList = checkSystemsByTemplate(installList)
-	dirtySystemCount = 0
-	print("already in activeSystems:", systemListInfo(activeSystems))
-	print("installList count:", tableCount(installList), systemListInfo(installList))
-	if tableCount(installList) > 0 then
-		installFromInventory(installList)
-	else		
-		invokeServerFunction("restore", secure()) -- share state with server
-		isInputCooldown = false
-		isNeedRefresh = true
-	end
+	invokeServerFunction("sendEntityScriptList", Player().index, "checkSystemsByTemplate", installList)
 end
 
-function checkSystemsByTemplate(templateList) -- client side
+function checkSystemsByTemplate(scripts, templateList) -- client side
 	-- chatMessage("checkSystemsByTemplate")	
 	local entity = Entity()
-	local scripts = entity:getScripts()
 	local fillIndex, dummiesTotal = fillEmptyWithDummies(scripts) -- TODO: must to be the script list from server
 	local installedSystems = {}
-	local notInstalledList = tableCopy(templateList)
+	local installList = tableCopy(templateList)
 	local uninstalledList = {}
 	local lastByPath = {}
 	local es, seed, er, rarity
-	for i, s in pairs(scripts) do
+	for i, s in pairsByKeys(scripts) do
 		-- work only with scripts from systems folder
 		if s:sub(0, #systemPath) == systemPath then
 			if lastByPath[s] then --move up previous to invoke current
@@ -694,9 +682,9 @@ function checkSystemsByTemplate(templateList) -- client side
 			if es == 0 and er == 0 then
 				-- check is use or uninstall
 				local systemUpgrade = SystemUpgradeTemplate(s, rarity, seed)
-				local isRemain, tIndex = tableContaine(notInstalledList, systemUpgrade, isSystemsEqual)
+				local isRemain, tIndex = tableContaine(installList, systemUpgrade, isSystemsEqual)
 				if isRemain then
-					notInstalledList[tIndex] = nil
+					installList[tIndex] = nil
 					installedSystems[i] = systemUpgrade
 					lastByPath[s] = { system = systemUpgrade, index = i }
 				else
@@ -717,7 +705,16 @@ function checkSystemsByTemplate(templateList) -- client side
 		toInventory(getFaction(), uninstalledList) 
 	end
 	
-	return installedSystems, notInstalledList
+	activeSystems = installedSystems
+	dirtySystemCount = 0
+	print("already in activeSystems:", systemListInfo(activeSystems), "installList count:", tableCount(installList))
+	if tableCount(installList) > 0 then
+		installFromInventory(installList)
+	else		
+		invokeServerFunction("restore", secure()) -- share state with server
+		isInputCooldown = false
+		isNeedRefresh = true
+	end
 end
 
 function fillEmptyWithDummies(scripts)
@@ -900,7 +897,7 @@ function installSystems(scriptList, systemList) -- client side
 			invokeServerFunction("sendEntityScriptList", Player().index, "installSystems", systemList)
 			return
 		end	
-		print("installSystems list:", systemListInfo(systemList))
+		-- print("installSystems list:", systemListInfo(systemList))
 		
 		local entity = Entity()
 		local scriptIndex = 1
@@ -908,6 +905,7 @@ function installSystems(scriptList, systemList) -- client side
 			-- find empty index
 			while scriptList[scriptIndex] do scriptIndex = scriptIndex + 1 end
 			if k and st then -- install
+				print("install at ", scriptIndex, "<-", systemInfo(st))
 				activeSystems[scriptIndex] = st -- add to active list
 				install(entity.index, st.script, st.seed.int32, st.rarity)
 				scriptIndex = scriptIndex + 1
@@ -918,7 +916,7 @@ function installSystems(scriptList, systemList) -- client side
 	invokeServerFunction("restore", secure()) -- share state with server
 	isInputCooldown = false
 	isNeedRefresh = true
-	print("installSystems done, activeSystems:", systemListInfo(activeSystems))
+	invokeServerFunction("sendEntityScriptList", Player().index, "checkActiveList") -- cheks result
 end
 
 function install(entityIndex, script, seed_int32, rarity)
@@ -936,7 +934,7 @@ function toInventory(factionIndex, systemList)
 		invokeServerFunction("toInventory", factionIndex, systemList)
 		return
 	end
-	print("toInventory, faction:", Faction(factionIndex), tableInfo(systemList))
+	print("toInventory, faction:", Faction(factionIndex), systemListInfo(systemList))
 	inventory = Faction(factionIndex):getInventory()
 	for i, v in pairs(systemList) do
 		v.favorite = true
@@ -1084,12 +1082,17 @@ function inventoryItemInfo(inventoryItem)
 	return info
 end
 
+function systemInfo(systemUpgrade)
+	return systemUpgrade.script ..
+		" rarity " .. tostring(systemUpgrade.rarity) ..
+		" seed " .. tostring(systemUpgrade.seed.value)
+end
+
 function systemListInfo(systemList)
 	result = ""
-	for k, s in pairs(systemList) do
+	for k, s in pairsByKeys(systemList) do
 		if k and s and s.seed then 
-			result = result .. "\n" .. tostring(k) .. " : " .. s.script ..
-				" rarity "..tostring(s.rarity).." seed "..tostring(s.seed.value)
+			result = result .. "\n" .. tostring(k) .. " : " .. systemInfo(s)
 		else
 			result = result.."Error! systemListInfo: systemList containe row without system data."..
 				" scriptKey: "..tostring(k)
