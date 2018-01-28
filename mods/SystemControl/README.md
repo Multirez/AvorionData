@@ -55,14 +55,13 @@ for these in the inventory.
 
 ## Known issues
 
+* Need create and use the log function instead print, to controll the output flow.
+
 * Current list not updates on new installiation if window is opened.
 
-* After apply template, some times activeSystem are not ident systems that returned to inventory.
-
-* Upgrades do not drops out of the ship during a crash.
-In the event of partial destruction or change in the ship size the upgrades are sent to the player's inventory.
-But if the ship is lost from the collision, or lost its HP without losing the processing power, the installed 
-improvements will be lost.
+* Upgrades do not drops out of the ship during a crash. In the event of partial destruction or change 
+in the ship size the upgrades, installed by SystemControl, are sent to the player's inventory, 
+even if the ship is lost from the collision.
 
 * Upgrades that are installed by SystemControl are not displayed in the standard [system upgrades] menu. 
 The developer did not give the opportunity to correctly install ship system upgrades(or I can't find that way, 

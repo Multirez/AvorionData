@@ -36,12 +36,13 @@ function initialize()
 	for i=1, totalTemplates do
 		systemTemplates[i] = {}
 	end	
-	print("all templates init to {}")
 	local entity = Entity()
 	upgradeSlotCount = processPowerToUpgradeCount(getProcessPower(entity))
 	if onServer() then	
 		entity:registerCallback("onSystemsChanged", "onSystemsChanged")
 		print("register callback onSystemsChanged")
+		entity:registerCallback("onDestroyed", "onDestroyed")
+		print("register callback onDestroyed")
 		chatMessage(ChatMessageType.Whisp, "System controll was initialized.")
 	else -- on client
 		print("client request syncWithClient")
@@ -152,6 +153,13 @@ function onKeyboardInput(inputIndex)
 	isInputCooldown = true
 	chatMessage(MessageType.Whisp, "SystemControl: apply template #"..tostring(inputIndex))
 	applyTemplate(systemTemplates[inputIndex])
+end
+
+function onDestroyed(index, lastDamageInflictor)
+	if onServer() and index == Entity().index then		
+		print("onDestroyed, invetory faction:", getFaction())
+		toInventory(getFaction(), getSystems()) -- need to clear current systems, that was be uncorect registered
+	end
 end
 
 function onSystemsChanged(shipIndex)
