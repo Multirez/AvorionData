@@ -19,5 +19,6 @@ end
 
 -- Example use to add a script to a players ship
 Config.Add("mods/RenameShips/scripts/entity/shipRename.lua")
+Config.Add("mods/SystemControl/scripts/entity/systemcontrol.lua")
 
 return Config
