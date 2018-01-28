@@ -16,7 +16,7 @@ local slotRequirements = {0, 51, 128, 320, 800, 2000, 5000, 12500, 19764,
 	31250, 43065, 59348, 78125, 107554, 148371}
 local upgradeSlotCount = nil
 local systemPath = "data/scripts/systems/"
-local dummyPath = "data/scripts/entity/dummy.lua"
+local dummyPath = "mods/SystemControl/scripts/entity/dummy.lua"
 
 local MaxMessageLength = 500
 -- ChatMessageType.Information on client fires attempt to index a nil value, create own enum
@@ -124,6 +124,10 @@ function restore(values)
 	usePlayerInventory = values["usePlayerInventory"] or true
 end
 
+function onIndexChanged(old, id) -- server side
+	dirtySystemCount = dirtySystemCount + 1 -- system indices was changed too
+end
+
 function updateClient(timeStep)	
 	if interactionPossible(Player().index) then	
 		local keyboard =  Keyboard()
@@ -175,7 +179,8 @@ end
 -- if this function returns false, the script will not be listed in the interaction window on the client,
 -- even though its UI may be registered
 function interactionPossible(playerIndex, option)
-    return Entity().index == Player(playerIndex).craftIndex -- only on ship
+	local entity = Entity()
+    return entity.index == Player(playerIndex).craftIndex and entity.isShip -- only on ship
 end
 
 function getIcon()
@@ -750,6 +755,13 @@ function installFromInventory(requestList, factionIndex, playerIndex)
 	invokeClientFunction(Player(playerIndex), "installSystems",  Entity():getScripts(), result)
 end
 
+function isSystemsEqual(systemA, systemB)
+	return (systemA ~= nil and systemB ~= nil and
+		systemA.script == systemB.script and
+		systemA.seed.int32 == systemB.seed.int32 and
+		systemA.rarity == systemB.rarity)
+end
+
 function inventoryComparer(entryA, entryB)
 	if entryA then
 		if entryB then 
@@ -915,13 +927,6 @@ function processPowerToUpgradeCount(processingPower)
 	end
 	
 	return tableCount(slotRequirements)
-end
-
-function isSystemsEqual(systemA, systemB)
-	return (systemA and systemB and
-		systemA.script == systemB.script and
-		systemA.seed == systemB.seed and
-		systemA.rarity == systemB.rarity)
 end
 
 -- for testing purposes

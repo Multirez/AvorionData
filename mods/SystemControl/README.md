@@ -55,6 +55,10 @@ for these in the inventory.
 
 ## Known issues
 
+* Current list not updates on new installiation if window is opened.
+
+* After apply template, some times activeSystem are not ident systems that returned to inventory.
+
 * Upgrades do not drops out of the ship during a crash.
 In the event of partial destruction or change in the ship size the upgrades are sent to the player's inventory.
 But if the ship is lost from the collision, or lost its HP without losing the processing power, the installed 
@@ -68,8 +72,11 @@ If I have one then it will be possible to improve the level of integration with 
 
 ## Future improvements
 
-* Add sounds to hotkeys
-* Save the current system set into the template by pressing Shift + Alt + #number
+* Add sounds to hotkeys;
+* Save the current system set into the template by pressing Shift + Alt + #number;
+* Make tamplate list srollable, increace template count to 9;
+* Show inventory for drag the upgrades from inventory to current or template;
+* All entities can has SystemUpgrades;
 
 ## Credits
 
