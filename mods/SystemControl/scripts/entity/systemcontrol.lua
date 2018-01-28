@@ -251,7 +251,7 @@ function onShowWindow()
 		print("dirtySystemCount:", dirtySystemCount)
 		-- clever update system list
 		if not isCleverUpdateIsRunning then
-			invokeServerFunction("sendEntityScriptList", Player().index, "cleverUpdateSystems", "onShowWindow")
+			invokeServerFunction("sendEntityScriptList", Player().index, "cleverUpdateSystems", nil, "onShowWindow")
 		else
 			sendChatMessage(MessageType.Error, "SystemControl: Wait for the previous update task is done.")
 		end
@@ -421,6 +421,7 @@ function checkActiveList(scripts)
 	for k, v in pairs(activeSystems) do
 		if scripts[k] ~= v.script then
 			print("Error! Check active systems failed. At ", k, "must be", v.script, "but in fact there is", scripts[k])
+			dirtySystemCount = dirtySystemCount + 1 -- active list is "dirty"
 		end
 	end
 	print("Check activeSystems complete.")
@@ -493,7 +494,6 @@ function cleverUpdateSystems(scripts, activeMap, onUpdateFuncName, ...) -- clien
 	isCleverUpdateIsRunning = true
 	isInputCooldown = true
 	if type(activeMap) ~= "table" then 
-		if type(activeMap)=="string" then onUpdateFuncName = activeMap end
 		print("Clever update: create map")
 		local entity = Entity()
 		local fillIndex, dummiesTotal = fillEmptyWithDummies(scripts)
@@ -640,7 +640,7 @@ function cleverUpdateSystems(scripts, activeMap, onUpdateFuncName, ...) -- clien
 		isInputCooldown = false
 		isCleverUpdateIsRunning = false
 		if onUpdateFuncName then
-			print("Try to run function: "..onUpdateFuncName)
+			print("Try to run function: "..onUpdateFuncName.."(...)")
 			_G[onUpdateFuncName](...) -- assert(, "error, while try to run function: "..onUpdateFuncName))
 		end
 	else -- do map work
@@ -656,77 +656,42 @@ function applyTemplate(templateList) -- client side
 	print("----templateList:", systemListInfo(installList))
 	if dirtySystemCount > 0 then
 		print("dirtySystemCount:", dirtySystemCount,"-> need to update")
-		invokeServerFunction("sendEntityScriptList", Player().index, "cleverUpdateSystems", 
-			"checkSystemsByTemplate", installList)
+		invokeServerFunction("sendEntityScriptList", Player().index, "cleverUpdateSystems", nil, 
+			"checkSystemsByTemplate", nil, installList)
 	else
 		invokeServerFunction("sendEntityScriptList", Player().index, "checkSystemsByTemplate", installList)
 	end
 end
 
 function checkSystemsByTemplate(scripts, templateList) -- client side
-	if not templateList then -- function called with one argument
-		templateList = scripts
-		scripts = nil		
-		if not templateList then -- error
-			print("Error! checkSystemsByTemplate: templateList can't be nil.")
-			
-			invokeServerFunction("restore", secure()) -- share state with server
-			isInputCooldown = false
-			isNeedRefresh = true
-			return
-		end
+	if not scripts then
+		invokeServerFunction("sendEntityScriptList", Player().index, "checkSystemsByTemplate", templateList)
+		return
 	end
 	-- chatMessage("checkSystemsByTemplate")	
 	local entity = Entity()
-	local fillIndex, dummiesTotal = fillEmptyWithDummies(scripts) -- TODO: must to be the script list from server
 	local installedSystems = {}
-	local installList = tableCopy(templateList)
+	local installList = tableCopy(templateList)	
 	local uninstalledList = {}
-	local lastByPath = {}
-	local es, seed, er, rarity
-	for i, s in pairsByKeys(scripts) do
-		-- work only with scripts from systems folder
-		if s:sub(0, #systemPath) == systemPath then
-			if lastByPath[s] then --move up previous to invoke current
-				moveSystemUp(lastByPath[s].system)				
-				dummiesTotal = dummiesTotal + 1
-				fillIndex = fillIndex + 1
-				while scripts[fillIndex] do fillIndex = fillIndex + 1 end -- to empty
-				installedSystems[fillIndex] = lastByPath[s].system
-				installedSystems[lastByPath[s].index] = nil
-			end
-			lastByPath[s] = nil			
-			es, rarity = entity:invokeFunction(s, "getRarity")			
-			er, seed = entity:invokeFunction(s, "getSeed")
-			if es == 0 and er == 0 then
-				-- check is use or uninstall
-				local systemUpgrade = SystemUpgradeTemplate(s, rarity, seed)
-				local isRemain, tIndex = tableContaine(installList, systemUpgrade, isSystemsEqual)
-				if isRemain then
-					installList[tIndex] = nil
-					installedSystems[i] = systemUpgrade
-					lastByPath[s] = { system = systemUpgrade, index = i }
-				else
-					unInstall(entity.index, s)
-					uninstalledList[i] = systemUpgrade
-				end
-			else
-				chatMessage("Error! Can't get systemUpgrade values for ", s, ". I will to delete it.")
-				unInstall(entity.index, s) -- delete upgrade with errors
-			end	
+	for i, system in pairsByKeys(activeSystems) do
+		local isRemain, tIndex = tableContaine(installList, system, isSystemsEqual)
+		if isRemain then
+			installList[tIndex] = nil
+			installedSystems[i] = system
+		else
+			unInstallByIndex(entity.index, i)
+			uninstalledList[i] = system
 		end
-	end
-	-- remove dummies
-	for i=1, dummiesTotal do
-		unInstall(entity.index, dummyPath)
-	end
-	if tableCount(uninstalledList) > 0 then -- return uninstalled systems to faction inventory
-		toInventory(getFaction(), uninstalledList) 
 	end
 	
 	activeSystems = installedSystems
 	dirtySystemCount = 0
-	print("already in activeSystems:", systemListInfo(activeSystems), "installList count:", tableCount(installList))
+	print("already in activeSystems:", systemListInfo(activeSystems), "\ninstallList count:", tableCount(installList))
+	
+	if tableCount(uninstalledList) > 0 then -- return uninstalled systems to faction inventory
+		toInventory(getFaction(), uninstalledList) 
+	end
+	
 	if tableCount(installList) > 0 then
 		installFromInventory(installList)
 	else		
