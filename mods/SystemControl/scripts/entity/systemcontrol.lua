@@ -1,10 +1,15 @@
+-------------------------------------------------------------------------------
+-- Allows player to create the templates (sets) of upgrades for ship systems 
+-- and quickly switch its from one to another.
+--
+-- @author Multirez (multirez@gmail.com)
+-- also there are many pieces of code I have peeked in the Internet
+-------------------------------------------------------------------------------
+
 package.path = package.path .. ";data/scripts/lib/?.lua"
 
---require("utility")
 require("stringutility")
---require("faction")
 require("debug")
---require("class")
 
 local activeSystems = {}
 local dirtySystemCount = 100500 -- number of the unaccounted systems, need to update activeSystems
@@ -30,35 +35,48 @@ local systemIcons = {}
 local buttonToLine = {}
 local usePlayerInventoryCheckBox = nil
 
+---- Log ----
+local LogType = { None=0, Error=1, Warning=2, Info=4, Debug=8, All=255 }
+local logPrefix = { [1]="(error)", [2]="(warning)", [4]="(info)", [8]="(debug)"}
+local logLevel = LogType.Warning -- sets current log level
+local logSource = "SystemControl:"
+local log = function(level, ...)
+	if logPrefix[level] and logLevel >= level then
+		print(logPrefix[level].." "..logSource, ...)
+	elseif logLevel >= LogType.Info then -- info by default
+		print(logSource, level, ...)
+	end
+end
 
 ---- API functions ----
 function initialize()
+	log(LogType.Debug, "Init templates to {}")
 	for i=1, totalTemplates do
 		systemTemplates[i] = {}
-	end	
+	end
 	local entity = Entity()
 	upgradeSlotCount = processPowerToUpgradeCount(getProcessPower(entity))
 	if onServer() then	
 		entity:registerCallback("onSystemsChanged", "onSystemsChanged")
-		print("register callback onSystemsChanged")
+		log(LogType.Debug, "register callback onSystemsChanged")
 		entity:registerCallback("onDestroyed", "onDestroyed")
-		print("register callback onDestroyed")
-		chatMessage(ChatMessageType.Whisp, "System controll was initialized.")
+		log(LogType.Debug, "register callback onDestroyed")
+		chatMessage(ChatMessageType.Whisp, "SystemControl was initialized.")
 	else -- on client
-		print("client request syncWithClient")
+		log(LogType.Debug, "client request syncWithClient")
 		invokeServerFunction("syncWithClient", Player().index)			
 	end
 end
 
 function onRemove()
-	print("onRemove, invetory faction:", getFaction())
+	log(LogType.Debug, "onRemove, invetory faction:", getFaction())
 	if onServer() then
 		toInventory(getFaction(), getSystems()) -- need to clear current systems, that was be uncorect registered
 	end
 end
 
 function secure()
-	print("secure(), isClient", onClient())
+	log(LogType.Debug, "secure(), isClient", onClient())
 	-- store activeSystems data
 	local data = {}
 	local systems = {}
@@ -71,7 +89,7 @@ function secure()
 			systemData["seed"] = system.seed.value
 			systems[k] = systemData
 		else
-			print("Error! secure: activeSystems containe row without system data.",
+			log(LogType.Error, "secure: activeSystems containe row without system data.",
 				"scriptKey:", k)
 		end		
 	end
@@ -88,7 +106,7 @@ function secure()
 				systemData["seed"] = system.seed.value
 				systems[k] = systemData
 			else
-				print("Error! secure: Template containe row without system data.",
+				log(LogType.Error, "secure: Template containe row without system data.",
 					"templateIndex:", t, "scriptKey:", k)
 			end
 		end
@@ -101,7 +119,7 @@ function secure()
 end
 
 function restore(values)
-	print("restore(), isClient", onClient())	
+	log(LogType.Debug, "restore(), isClient", onClient())	
 	if type(values) ~= "table" then
 		return
 	end
@@ -120,7 +138,7 @@ function restore(values)
 				Rarity(systemData["rarity"]), Seed(systemData["seed"]))
 		end
 	end
-	-- print("restored templates:", tableInfo(systemTemplates))
+	-- log(LogType.Debug, "restored templates:", tableInfo(systemTemplates))
 	-- settings
 	usePlayerInventory = values["usePlayerInventory"] or true
 end
@@ -157,7 +175,7 @@ end
 
 function onDestroyed(index, lastDamageInflictor)
 	if onServer() and index == Entity().index then		
-		print("onDestroyed, invetory faction:", getFaction())
+		log(LogType.Debug, "onDestroyed, invetory faction:", getFaction())
 		toInventory(getFaction(), getSystems()) -- need to clear current systems, that was be uncorect registered
 	end
 end
@@ -165,7 +183,7 @@ end
 function onSystemsChanged(shipIndex)
 	local entity = Entity()
 	if shipIndex == entity.index then 
-		print("onSystemsChanged")
+		log(LogType.Debug, "onSystemsChanged")
 		if not isCheckSystemsSheduled then
 			isCheckSystemsSheduled = true
 			deferredCallback(0.5, "delayedSystemCheck")
@@ -196,7 +214,7 @@ function getIcon()
 end
 
 function initUI()
-	print("initUI")
+	log(LogType.Debug, "initUI")
     local size = vec2(960, 600)
     local res = getResolution()
 
@@ -256,7 +274,7 @@ end
 
 function onShowWindow()
 	if dirtySystemCount ~= 0 then -- will update activeSystems
-		print("dirtySystemCount:", dirtySystemCount)
+		log(LogType.Debug, "dirtySystemCount:", dirtySystemCount)
 		-- clever update system list
 		if not isCleverUpdateIsRunning then
 			invokeServerFunction("sendEntityScriptList", Player().index, "cleverUpdateSystems", nil, "onShowWindow")
@@ -425,19 +443,19 @@ end
 
 ---- Functions ----
 function checkActiveList(scripts)
-	print("Check activeSystems start.")
+	log(LogType.Debug, "Check activeSystems start.")
 	for k, v in pairs(activeSystems) do
 		if scripts[k] ~= v.script then
-			print("Error! Check active systems failed. At ", k, "must be", v.script, "but in fact there is", scripts[k])
+			log(LogType.Error, "Check active systems failed. At ", k, "must be", v.script, "but in fact there is", scripts[k])
 			dirtySystemCount = dirtySystemCount + 1 -- active list is "dirty"
 		end
 	end
-	print("Check activeSystems complete.")
+	log(LogType.Debug, "Check activeSystems complete.")
 end
 
 -- share settings and templates with player
 function syncWithClient(playerIndex) -- server side
-	print("send to client secure data")
+	log(LogType.Debug, "send to client secure data")
 	invokeClientFunction(Player(playerIndex), "restore", secure())
 end
 
@@ -502,7 +520,7 @@ function cleverUpdateSystems(scripts, activeMap, onUpdateFuncName, ...) -- clien
 	isCleverUpdateIsRunning = true
 	isInputCooldown = true
 	if type(activeMap) ~= "table" then 
-		print("Clever update: create map")
+		log(LogType.Debug, "Clever update: create map")
 		local entity = Entity()
 		local fillIndex, dummiesTotal = fillEmptyWithDummies(scripts)
 		local es, seed, er, rarity, systemUpgrade, isSystem
@@ -528,7 +546,7 @@ function cleverUpdateSystems(scripts, activeMap, onUpdateFuncName, ...) -- clien
 					er, rarity = entity:invokeFunction(s, "getRarity")			
 					es, seed = entity:invokeFunction(s, "getSeed")
 					if er ~= 0 or es ~= 0 then
-						print("Error! Can't get systemUpgrade values for ", s, 
+						log(LogType.Error, "Can't get systemUpgrade values for ", s, 
 							"I will create a replacement with a common rarity.")
 					end
 					systemUpgrade = SystemUpgradeTemplate(s, rarity or Rarity(0), seed or Seed(111111))
@@ -550,11 +568,11 @@ function cleverUpdateSystems(scripts, activeMap, onUpdateFuncName, ...) -- clien
 		return
 	end
 	
-	print("Check map identity...")
+	log(LogType.Debug, "Check map identity...")
 	local isCorrupted = false
 	for index, mapValue in pairs(activeMap) do
 		if scripts[index] ~= mapValue.system.script then
-			print("Error! active Map is corrupted at", index,
+			log(LogType.Error, "activeMap is corrupted at", index,
 				"must be:", mapValue.system.script, "but in fact:", scripts[index])
 			isCorrupted = true
 		end
@@ -565,7 +583,7 @@ function cleverUpdateSystems(scripts, activeMap, onUpdateFuncName, ...) -- clien
 		mapData = {}
 		isDone = true
 	end
-	print("Clever update: arrangement by activeMap")
+	log(LogType.Debug, "Clever update: arrangement by activeMap")
 	local unInstallList = {}
 	local installList = {}
 	local scriptIndex = 0
@@ -582,12 +600,12 @@ function cleverUpdateSystems(scripts, activeMap, onUpdateFuncName, ...) -- clien
 		if scriptPath then -- installed system -- check the map
 			if scriptIndex == currentIndex then
 				if scriptIndex == mapData.index then
-					print(scriptIndex, " = ", currentIndex, "(", mapData.index, ")")
+					log(LogType.Debug, scriptIndex, " = ", currentIndex, "(", mapData.index, ")")
 					activeSystems[currentIndex] = mapData.system
 					-- all is ok, go to next mapData
 				else -- shift map
 					local shift = currentIndex - mapData.index
-					print("shift from ", mapData.index, "by", shift)
+					log(LogType.Debug, "shift from ", mapData.index, "by", shift)
 					repeat
 						mapData.index = mapData.index + shift
 						currentIndex, mapData = sortedMapIter()
@@ -605,17 +623,17 @@ function cleverUpdateSystems(scripts, activeMap, onUpdateFuncName, ...) -- clien
 					activeMap[emptyScriptIndex] = scriptData
 					unInstallList[scriptIndex] = scriptData.system
 					activeMap[scriptIndex] = nil
-					print(scriptIndex, "(", scriptData.index, ") ->", 
+					log(LogType.Debug, scriptIndex, "(", scriptData.index, ") ->", 
 						emptyScriptIndex, "(", scriptData.index, ")", scriptData.system.script)
 				end				
-				print("need make install work to continue, stop at ", currentIndex, "(", mapData.index, ")",
+				log(LogType.Debug, "need make install work to continue, stop at ", currentIndex, "(", mapData.index, ")",
 					"script", scriptIndex, "->", scriptPath)
 				isDone = false
 				break
 			end
 		else -- empty script index
 			if mapData[currentIndex] then
-				print("Error! Map is corrupted -> stops map work, uninstall all.")
+				log(LogType.Error, "Map is corrupted -> stops map work, uninstall all.")
 				isInputCooldown = false
 				onClearButton()
 				return
@@ -624,31 +642,31 @@ function cleverUpdateSystems(scripts, activeMap, onUpdateFuncName, ...) -- clien
 			activeMap[scriptIndex] = mapData
 			unInstallList[currentIndex] = mapData.system
 			activeMap[currentIndex] = nil
-			print(currentIndex, "(", mapData.index, ") ->", scriptIndex, "(", mapData.index, ")")
+			log(LogType.Debug, currentIndex, "(", mapData.index, ") ->", scriptIndex, "(", mapData.index, ")")
 		end
 		currentIndex, mapData = sortedMapIter() -- goto next map data
 	end
-	-- print("Clever update: install work, to install:", tableCount(installList))
+	-- log(LogType.Debug, "Clever update: install work, to install:", tableCount(installList))
 	local entityIndex = Entity().index
 	for installIndex, system in pairsByKeys(installList) do
-		-- print("Clever update: install", installIndex, "<-", system.script)
+		-- log(LogType.Debug, "Clever update: install", installIndex, "<-", system.script)
 		activeSystems[installIndex] = system
 		install(entityIndex, system.script, system.seed.int32, system.rarity)
 	end
-	-- print("Clever update: unInstall work, to uninstall:", tableCount(unInstallList))
+	-- log(LogType.Debug, "Clever update: unInstall work, to uninstall:", tableCount(unInstallList))
 	for uninstallIndex, system in pairs(unInstallList) do
-		-- print("Clever update: uninstall", uninstallIndex, "X->", system.script)
+		-- log(LogType.Debug, "Clever update: uninstall", uninstallIndex, "X->", system.script)
 		unInstallByIndex(entityIndex, uninstallIndex)
 	end
 	isNeedRefresh = true
 	
 	if isDone then
-		print("Clever update is done")
+		log(LogType.Debug, "Clever update is done")
 		invokeServerFunction("restore", secure()) -- share state with server
 		isInputCooldown = false
 		isCleverUpdateIsRunning = false
 		if onUpdateFuncName then
-			print("Try to run function: "..onUpdateFuncName.."(...)")
+			log(LogType.Debug, "Try to run function: "..onUpdateFuncName.."(...)")
 			_G[onUpdateFuncName](...) -- assert(, "error, while try to run function: "..onUpdateFuncName))
 		end
 	else -- do map work
@@ -661,9 +679,9 @@ end
 function applyTemplate(templateList) -- client side
 	-- checks is template length < slot count, or use sub template	
 	local installList = tableSub(templateList, 1 , upgradeSlotCount)	
-	print("----templateList:", systemListInfo(installList))
+	log(LogType.Debug, "----templateList:", systemListInfo(installList))
 	if dirtySystemCount > 0 then
-		print("dirtySystemCount:", dirtySystemCount,"-> need to update")
+		log(LogType.Debug, "dirtySystemCount:", dirtySystemCount,"-> need to update")
 		invokeServerFunction("sendEntityScriptList", Player().index, "cleverUpdateSystems", nil, 
 			"checkSystemsByTemplate", nil, installList)
 	else
@@ -694,7 +712,7 @@ function checkSystemsByTemplate(scripts, templateList) -- client side
 	
 	activeSystems = installedSystems
 	dirtySystemCount = 0
-	print("already in activeSystems:", systemListInfo(activeSystems), "\ninstallList count:", tableCount(installList))
+	log(LogType.Debug, "already in activeSystems:", systemListInfo(activeSystems), "\ninstallList count:", tableCount(installList))
 	
 	if tableCount(uninstalledList) > 0 then -- return uninstalled systems to faction inventory
 		toInventory(getFaction(), uninstalledList) 
@@ -747,7 +765,7 @@ end
 -- Removes systems from inventory and install its.
 function installFromInventory(requestList, factionIndex, playerIndex)
 	if onClient() then
-		print("installFromInventory RequestList:", systemListInfo(requestList))
+		log(LogType.Debug, "installFromInventory RequestList:", systemListInfo(requestList))
 		invokeServerFunction("installFromInventory", requestList, getFaction(), Player().index)
 		return
 	end	
@@ -814,12 +832,12 @@ function getSystems()
 			e, rarity = entity:invokeFunction(s, "getRarity")
 			e, seed = entity:invokeFunction(s, "getSeed")
 			if seed ~= nil and rarity ~= nil then
-				print(i, ":", s, "rarity", rarity.value, "seed", seed.value)
+				log(LogType.Debug, i, ":", s, "rarity", rarity.value, "seed", seed.value)
 				-- local key = type(i) == "string" and i or tostring(i)
 				result[i] = SystemUpgradeTemplate(s, rarity, seed)
 				unInstall(entity.index, s)
 			else
-				print("Error! Can't get systemUpgrade values.")
+				log(LogType.Error, "Can't get systemUpgrade values.")
 			end			
 		end
 		if s == dummyPath then
@@ -844,30 +862,30 @@ end
 -- UNINSTALL an upgrade by script index
 function unInstallByIndex(entityIndex, scriptIndex) 
 	if onClient() then
-		-- print("unInstallByIndex, scriptIndex:", scriptIndex)
+		log(LogType.Debug, "unInstallByIndex, scriptIndex:", scriptIndex)
 		Entity():removeScript(tonumber(scriptIndex))
 		invokeServerFunction("unInstallByIndex", entityIndex, scriptIndex)
 		return
 	end
-	-- print("unInstallByIndex, scriptIndex:", scriptIndex)
+	log(LogType.Debug, "unInstallByIndex, scriptIndex:", scriptIndex)
 	Entity():removeScript(tonumber(scriptIndex))
 end
 
 -- for share server entity scripts with client
 function sendEntityScriptList(targetPlayerIndex, targetClientFunctionName, ...) -- server side
 	if onClient() then
-		print("Error! Try to sendEntityScriptList from client.",
+		log(LogType.Error, "Try to sendEntityScriptList from client.",
 			"You must invoke this function only on server side.",
 			"Callback name:", targetClientFunctionName)
 		return
 	end
-	-- chatMessage("sendEntityScriptList: send scripList to", targetClientFunctionName)
+	log(LogType.Debug, "sendEntityScriptList: send scripList to", targetClientFunctionName)
 	invokeClientFunction(Player(targetPlayerIndex), targetClientFunctionName, 
 		Entity():getScripts(), ...)
 end
 
 function printEntityScripts(entityIndex) -- server side
-	print("scripts of entity, index:", entityIndex, tableInfo(Entity(entityIndex):getScripts()))
+	log(LogType.Debug, "scripts of entity, index:", entityIndex, tableInfo(Entity(entityIndex):getScripts()))
 end
 
 function installSystems(scriptList, systemList) -- client side
@@ -875,7 +893,7 @@ function installSystems(scriptList, systemList) -- client side
 		systemList = scriptList
 		scriptList = nil		
 		if not systemList then -- error
-			print("Error! installSystems: systemList can't be nil.")
+			log(LogType.Error, "installSystems: systemList can't be nil.")
 			
 			invokeServerFunction("restore", secure()) -- share state with server
 			isInputCooldown = false
@@ -889,7 +907,7 @@ function installSystems(scriptList, systemList) -- client side
 			invokeServerFunction("sendEntityScriptList", Player().index, "installSystems", systemList)
 			return
 		end	
-		-- print("installSystems list:", systemListInfo(systemList))
+		-- log(LogType.Debug, "installSystems list:", systemListInfo(systemList))
 		
 		local entity = Entity()
 		local scriptIndex = 1
@@ -897,7 +915,7 @@ function installSystems(scriptList, systemList) -- client side
 			-- find empty index
 			while scriptList[scriptIndex] do scriptIndex = scriptIndex + 1 end
 			if k and st then -- install
-				print("install at ", scriptIndex, "<-", systemInfo(st))
+				log(LogType.Debug, "install at ", scriptIndex, "<-", systemInfo(st))
 				activeSystems[scriptIndex] = st -- add to active list
 				install(entity.index, st.script, st.seed.int32, st.rarity)
 				scriptIndex = scriptIndex + 1
@@ -926,7 +944,7 @@ function toInventory(factionIndex, systemList)
 		invokeServerFunction("toInventory", factionIndex, systemList)
 		return
 	end
-	print("toInventory, faction:", Faction(factionIndex), systemListInfo(systemList))
+	log(LogType.Debug, "toInventory, faction:", Faction(factionIndex), systemListInfo(systemList))
 	inventory = Faction(factionIndex):getInventory()
 	for i, v in pairs(systemList) do
 		v.favorite = true
@@ -945,7 +963,7 @@ end
 function processPowerToUpgradeCount(processingPower)
 	for i, requiredPP in ipairs(slotRequirements) do
 		if requiredPP > processingPower then			
-			print("process power:", processingPower, "slots:", (i - 1))
+			log(LogType.Debug, "process power:", processingPower, "slots:", (i - 1))
 			return (i - 1)
 		end
 	end
@@ -958,7 +976,7 @@ function test()
 	
 	--[[ local componentType = ComponentType.Scripts
 	local entity = Entity()
-	print(entity.name, "has", componentType, ":", entity:hasComponent(componentType))
+	log(LogType.Debug, entity.name, "has", componentType, ":", entity:hasComponent(componentType))
 	if entity:hasComponent(componentType) then		
 	end ]]	
 					
@@ -1045,6 +1063,7 @@ function pairsSorted(tb, valueComparer)
 	return iter
 end
 
+
 ---- Info ---
 -- Returns string class values and meta
 function classInfo(class)
@@ -1088,7 +1107,7 @@ function systemListInfo(systemList)
 		else
 			result = result.."Error! systemListInfo: systemList containe row without system data."..
 				" scriptKey: "..tostring(k)
-			print("Error! systemListInfo: systemList containe row without system data.",
+			log(LogType.Error, "systemListInfo: systemList containe row without system data.",
 				"scriptKey:", k)
 		end
 	end	
@@ -1138,6 +1157,7 @@ function chatMessage(messageType, ...)
 	local length = #message
 	
 	local sendMessage = function(msg)
+		log(LogType.Info, "chatMessage("..messageType..")", msg)
 		if onServer() then
 			local pilot = { Entity():getPilotIndices() }
 			for i=1, #pilot do
@@ -1174,10 +1194,12 @@ function chatMessage(messageType, ...)
 end
 
 function sendMail(playerIndex, mail)
-	if onClient() then
+	log(LogType.Info, "sendMail:", mail.sender, "->", mail.receiver.name, mail.header, 
+		mail.text:sub(1, math.min(200, #(mail.text))))
+	if onClient() then		
 		invokeServerFunction("sendMail", playerIndex, mail)
 		return
-	end
+	end	
 	
 	Player(playerIndex):addMail(mail)
 end

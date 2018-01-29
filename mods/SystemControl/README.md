@@ -59,8 +59,6 @@ for these in the inventory.
 
 ## Known issues
 
-* Need create and use the log function instead print, to controll the output flow.
-
 * Current list not updates on new installiation if window is opened.
 
 * Upgrades do not drops out of the ship during a crash. In the event of partial destruction or change 
