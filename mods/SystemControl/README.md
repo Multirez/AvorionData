@@ -45,7 +45,7 @@ If you installed everything correctly, you should see a system upgrade icon at t
 Install desired upgrades through the standard interface and press an upgrade icon, its will open 
 the SystemControl window.
 
-https://i.imgur.com/7xiBZyI.png
+![Screenshot](SystemControlPreview.png)
 
 The topmost line (1) shows the current systems installed on the ship, the other lines show your templates
 saved earlier. __Update__(2) button will replace the template by the current list of upgrades.
