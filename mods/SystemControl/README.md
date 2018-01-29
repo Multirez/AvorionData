@@ -42,15 +42,13 @@ Before the last line containing return Config add this code:
 
 If you installed everything correctly, you should see a system upgrade icon at top-right of the screen.
 
-Install desired upgrades through the standard interface and press an upgrade icon, its will open 
-the SystemControl window.
-
 ![Screenshot](SystemControlPreview.png)
 
-The topmost line (1) shows the current systems installed on the ship, the other lines show your templates
-saved earlier. __Update__(2) button will replace the template by the current list of upgrades.
-The __Apply__(3) button calls the SystemControl to find and install the upgrades according the tamplate. 
-Search will be made in the player's inventory or ship's faction, depending on the status of 
+Install desired upgrades through the standard interface and press an upgrade icon, its will open 
+the SystemControl window. The topmost line (1) shows the current systems installed on the ship, the other 
+lines show your templates saved earlier. __Update__(2) button will replace the template by the current 
+list of upgrades. The __Apply__(3) button calls the SystemControl to find and install the upgrades according 
+the tamplate. Search will be made in the player's inventory or ship's faction, depending on the status of 
 the checkbox __Use player inventory__(4).
 
 You can use hot keys to apply the required template Alt + #number of template.

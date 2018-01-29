@@ -2,6 +2,7 @@
 /*/
 !/data/
 !/mods/
+!/download/
 
 # Compiled Lua sources
 luac.out
