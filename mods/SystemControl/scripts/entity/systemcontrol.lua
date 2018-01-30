@@ -478,7 +478,7 @@ function checkSystemsByProcessing(serverScripts) -- client side
 	end
 	
 	local totalExtraUpgrades = entityUpgradesCount - upgradeSlotCount
-	dirtySystemCount = entityUpgradesCount - tableCount(activeSystems)
+	dirtySystemCount = math.max(entityUpgradesCount - tableCount(activeSystems), dirtySystemCount + 1)
 	if totalExtraUpgrades > 0 then -- remove last if not enough slots	
 		local totalToRemove = math.min(tableCount(activeSystems), totalExtraUpgrades)
 		if totalToRemove > 0 then
@@ -522,7 +522,7 @@ function cleverUpdateSystems(scripts, activeMap, onUpdateFuncName, ...) -- clien
 	if type(activeMap) ~= "table" then 
 		log(LogType.Debug, "Clever update: create map")
 		local entity = Entity()
-		local fillIndex, dummiesTotal = fillEmptyWithDummies(scripts)
+		local fillIndex, dummiesTotal = fillEmptyWithDummies(scripts, false)
 		local es, seed, er, rarity, systemUpgrade, isSystem
 		local lastByPath = {} -- { path = { system = SystemUpgrade, index = currentIndex } }
 		local result = {} -- { currentIndex = { system = SystemUpgrade, index = startIndex } }		
@@ -556,6 +556,16 @@ function cleverUpdateSystems(scripts, activeMap, onUpdateFuncName, ...) -- clien
 				lastByPath[s] = { system = systemUpgrade, index = i }
 			end
 		end
+		
+		for s, system in pairs(lastByPath) do -- compleately remove systems from vanima
+			moveSystemUp(lastByPath[s].system)				
+			dummiesTotal = dummiesTotal + 1
+			fillIndex = fillIndex + 1
+			while scripts[fillIndex] do fillIndex = fillIndex + 1 end -- to empty
+			result[fillIndex] = result[lastByPath[s].index]
+			result[lastByPath[s].index] = nil
+		end
+		
 		activeSystems = {}
 		dirtySystemCount = 0
 		-- remove dummies
@@ -727,14 +737,22 @@ function checkSystemsByTemplate(scripts, templateList) -- client side
 	end
 end
 
-function fillEmptyWithDummies(scripts)
+function fillEmptyWithDummies(scripts, isSmartFill)
 	local entity = Entity()
 	local fillToIndex = 0
-	local countByPath = {}
-	for i, s in pairs(scripts) do -- prepare countByPath
-		if s:sub(0, #systemPath) == systemPath then
-			countByPath[s] = (countByPath[s] or 0) + 1
-			if countByPath[s] > 1 then
+	if isSmartFill then
+		local countByPath = {}
+		for i, s in pairs(scripts) do -- prepare countByPath
+			if s:sub(0, #systemPath) == systemPath then
+				countByPath[s] = (countByPath[s] or 0) + 1
+				if countByPath[s] > 1 then
+					fillToIndex = i
+				end
+			end
+		end
+	else -- fill to last system script
+		for i, s in pairs(scripts) do -- prepare countByPath
+			if s:sub(0, #systemPath) == systemPath then
 				fillToIndex = i
 			end
 		end
