@@ -25,6 +25,8 @@ even if the ship belongs to the alliance.
 
 ## Download
 
+https://github.com/Multirez/AvorionData/blob/master/download/SystemControl_v1.02.zip?raw=true
+
 ## Installation
 
 1. Download the mod ShipScriptLoader by Dirtyredz and follow its installation instructions. 
