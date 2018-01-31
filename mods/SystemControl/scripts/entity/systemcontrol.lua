@@ -69,7 +69,7 @@ local infoButton = nil
 ---- Log ----
 local LogType = { None=0, Error=1, Warning=2, Info=4, Debug=8, All=255 }
 local logPrefix = { [1]="(error)", [2]="(warning)", [4]="(info)", [8]="(debug)"}
-local logLevel = LogType.Debug -- sets current log level
+local logLevel = LogType.Warning -- sets current log level
 local logSource = "SystemControl:"
 local log = function(level, ...)
 	if logPrefix[level] and logLevel >= level then
@@ -212,6 +212,8 @@ function onDestroyed(index, lastDamageInflictor)
 end
 
 function onSystemsChanged(shipIndex)
+	if isCleverUpdateIsRunning then return end -- exit if clever update
+	
 	local entity = Entity()
 	if shipIndex == entity.index then 
 		log(LogType.Debug, "onSystemsChanged")
@@ -311,7 +313,7 @@ function onShowWindow()
 		log(LogType.Debug, "dirtySystemCount:", dirtySystemCount)
 		-- clever update system list
 		if not isCleverUpdateIsRunning then
-			invokeServerFunction("sendEntityScriptList", Player().index, "cleverUpdateSystems", nil, "onShowWindow")
+			cleverUpdateSystems(nil, "onShowWindow")
 		else
 			sendChatMessage(MessageType.Error, "SystemControl: Wait for the previous update task is done.")
 		end
@@ -484,7 +486,7 @@ function onCurrentUpdateButton()
 	log(LogType.Debug, "onCurrentUpdateButton")
 	-- clever update system list
 	if not isCleverUpdateIsRunning then
-		invokeServerFunction("sendEntityScriptList", Player().index, "cleverUpdateSystems", nil, "onShowWindow")
+		cleverUpdateSystems(nil, "onShowWindow")
 	else
 		sendChatMessage(MessageType.Error, "SystemControl: Wait for the previous update task is done.")
 	end
@@ -566,68 +568,73 @@ end
 
 -- update the list of active systems with the help of smart reinstalling
 -- also can to call some function after update
-function cleverUpdateSystems(scripts, activeMap, onUpdateFuncName, ...) -- client side
-	isCleverUpdateIsRunning = true
-	isInputCooldown = true
-	if type(activeMap) ~= "table" then 
-		log(LogType.Debug, "Clever update: create map")
-		local entity = Entity()
-		local fillIndex, dummiesTotal = fillEmptyWithDummies(scripts, false)
-		local es, seed, er, rarity, systemUpgrade, isSystem
-		local lastByPath = {} -- { path = { system = SystemUpgrade, index = currentIndex } }
-		local result = {} -- { currentIndex = { system = SystemUpgrade, index = startIndex } }		
-		-- try to get list -- sequence must to be saved
-		for i, s in pairs(scripts) do
-			-- work only with scripts from systems folder
-			if s:sub(0, #systemPath) == systemPath then
-				if lastByPath[s] then --move up previous to invokeFunction on current
-					moveSystemUp(lastByPath[s].system)				
-					dummiesTotal = dummiesTotal + 1
-					fillIndex = fillIndex + 1
-					while scripts[fillIndex] do fillIndex = fillIndex + 1 end -- to empty
-					result[fillIndex] = result[lastByPath[s].index]
-					result[lastByPath[s].index] = nil
-				end
-				lastByPath[s] = nil
-				
-				if false then -- TODO: in future use activeSystems[i] then
-					systemUpgrade = activeSystems[i]
-				else
-					er, rarity = entity:invokeFunction(s, "getRarity")			
-					es, seed = entity:invokeFunction(s, "getSeed")
-					if er ~= 0 or es ~= 0 then
-						log(LogType.Error, "Can't get systemUpgrade values for ", s, 
-							"I will create a replacement with a common rarity.")
-					end
-					systemUpgrade = SystemUpgradeTemplate(s, rarity or Rarity(0), seed or Seed(111111))
-				end
-				
-				result[i] = { system = systemUpgrade, index = i }
-				lastByPath[s] = { system = systemUpgrade, index = i }
-			end
-		end
-		
-		for s, system in pairs(lastByPath) do -- compleately remove systems from vanima
-			moveSystemUp(lastByPath[s].system)				
-			dummiesTotal = dummiesTotal + 1
-			fillIndex = fillIndex + 1
-			while scripts[fillIndex] do fillIndex = fillIndex + 1 end -- to empty
-			result[fillIndex] = result[lastByPath[s].index]
-			result[lastByPath[s].index] = nil
-		end
-		
+function cleverUpdateSystems(playerIndex, onUpdateFuncName, ...) -- server side
+	if onClient() then
+		isCleverUpdateIsRunning = true
+		isInputCooldown = true
 		activeSystems = {}
 		dirtySystemCount = 0
-		-- remove dummies
-		for i=1, dummiesTotal do
-			unInstall(entity.index, dummyPath)
-		end 		
-		
-		invokeServerFunction("sendEntityScriptList", Player().index, "cleverUpdateSystems",
-			result, onUpdateFuncName, ...)
+		log(LogType.Debug, "Clever update: create map")
+		invokeServerFunction("cleverUpdateSystems", playerIndex or Player().index, 
+			onUpdateFuncName, ...)
 		return
 	end
 	
+	isCleverUpdateIsRunning = true -- on server
+	log(LogType.Debug, "Clever update: create map")
+	local entity = Entity()
+	local scripts = entity:getScripts()
+	local fillIndex, dummiesTotal = fillEmptyWithDummies(scripts, false)
+	local es, seed, er, rarity, systemUpgrade, isSystem
+	local lastByPath = {} -- { path = { system = SystemUpgrade, index = currentIndex } }
+	local result = {} -- { currentIndex = { system = SystemUpgrade, index = startIndex } }		
+	-- try to get list -- sequence must to be saved
+	for i, s in pairs(scripts) do
+		-- work only with scripts from systems folder
+		if s:sub(0, #systemPath) == systemPath then
+			if lastByPath[s] then --move up previous to invokeFunction on current
+				moveSystemUp(entity, lastByPath[s].system)				
+				dummiesTotal = dummiesTotal + 1
+				fillIndex = fillIndex + 1
+				while scripts[fillIndex] do fillIndex = fillIndex + 1 end -- to empty
+				result[fillIndex] = result[lastByPath[s].index]
+				result[lastByPath[s].index] = nil
+			end
+			lastByPath[s] = nil
+			
+			er, rarity = entity:invokeFunction(s, "getRarity")			
+			es, seed = entity:invokeFunction(s, "getSeed")
+			if er ~= 0 or es ~= 0 then
+				log(LogType.Error, "Can't get systemUpgrade values for ", s, 
+					"I will create a replacement with a common rarity.")
+			end
+			systemUpgrade = SystemUpgradeTemplate(s, rarity or Rarity(0), seed or Seed(111111))
+			
+			result[i] = { system = systemUpgrade, index = i }
+			lastByPath[s] = { system = systemUpgrade, index = i }
+		end
+	end
+	
+	for s, system in pairs(lastByPath) do -- compleately remove systems from vanima
+		moveSystemUp(entity, lastByPath[s].system)				
+		dummiesTotal = dummiesTotal + 1
+		fillIndex = fillIndex + 1
+		while scripts[fillIndex] do fillIndex = fillIndex + 1 end -- to empty
+		result[fillIndex] = result[lastByPath[s].index]
+		result[lastByPath[s].index] = nil
+	end
+	
+	-- remove dummies
+	for i=1, dummiesTotal do
+		entity:removeScript(dummyPath)
+	end 		
+	
+	invokeClientFunction(Player(playerIndex), 
+		"arrageByMap", entity:getScripts(), result, onUpdateFuncName, ...)
+	isCleverUpdateIsRunning = false -- on server
+end
+
+function arrageByMap(scripts, activeMap, onUpdateFuncName, ...) -- client side
 	log(LogType.Debug, "Check map identity...")
 	local isCorrupted = false
 	for index, mapValue in pairs(activeMap) do
@@ -643,7 +650,7 @@ function cleverUpdateSystems(scripts, activeMap, onUpdateFuncName, ...) -- clien
 		mapData = {}
 		isDone = true
 	end
-	log(LogType.Debug, "Clever update: arrangement by activeMap")
+	log(LogType.Debug, "Arrangement by activeMap")
 	local unInstallList = {}
 	local installList = {}
 	local scriptIndex = 0
@@ -730,7 +737,7 @@ function cleverUpdateSystems(scripts, activeMap, onUpdateFuncName, ...) -- clien
 			_G[onUpdateFuncName](...) -- assert(, "error, while try to run function: "..onUpdateFuncName))
 		end
 	else -- do map work
-		invokeServerFunction("sendEntityScriptList", Player().index, "cleverUpdateSystems",
+		invokeServerFunction("sendEntityScriptList", Player().index, "arrageByMap",
 			activeMap, onUpdateFunc, ...)
 	end
 end
@@ -742,8 +749,7 @@ function applyTemplate(templateList) -- client side
 	log(LogType.Debug, "----templateList:", systemListInfo(installList))
 	if dirtySystemCount > 0 then
 		log(LogType.Debug, "dirtySystemCount:", dirtySystemCount,"-> need to update")
-		invokeServerFunction("sendEntityScriptList", Player().index, "cleverUpdateSystems", nil, 
-			"checkSystemsByTemplate", nil, installList)
+		cleverUpdateSystems(nil, "checkSystemsByTemplate", nil, installList)
 	else
 		invokeServerFunction("sendEntityScriptList", Player().index, "checkSystemsByTemplate", installList)
 	end
@@ -788,8 +794,7 @@ function checkSystemsByTemplate(scripts, templateList) -- client side
 	end
 end
 
-function fillEmptyWithDummies(scripts, isSmartFill)
-	local entity = Entity()
+function fillEmptyWithDummies(scripts, isSmartFill) -- server side
 	local fillToIndex = 0
 	if isSmartFill then
 		local countByPath = {}
@@ -809,10 +814,11 @@ function fillEmptyWithDummies(scripts, isSmartFill)
 		end
 	end
 	
+	local entity = Entity()	
 	local totalDummies = 0
 	for i=1, fillToIndex do
 		if scripts[i] == nil then -- fill with dummies empty space
-			install(entity.index, dummyPath, 0, 0)
+			entity:addScript(dummyPath)
 			totalDummies = totalDummies + 1
 		end
 	end
@@ -821,14 +827,13 @@ function fillEmptyWithDummies(scripts, isSmartFill)
 end
 
 -- moves system up and replace it by dummy to invokeFunction on other
-function moveSystemUp(system) -- client side
-	entity = Entity()
+function moveSystemUp(entity, system) -- server side
 	-- add copy
-	install(entity.index, system.script, system.seed.int32, system.rarity)
+	entity:addScript(system.script, system.seed.int32, system.rarity)
 	-- remove
-	unInstall(entity.index, system.script)
+	entity:removeScript(system.script)
 	-- and replace by dummy
-	install(entity.index, dummyPath, 0, 0)
+	entity:addScript(dummyPath)
 end
 
 -- Removes systems from inventory and install its.
