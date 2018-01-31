@@ -275,7 +275,7 @@ function initUI()
 	label = window:createLabel(pos + vec2(0, padding), "Current"%t, labelFontSize)
 	infoButton = window:createButton(
 		Rect(pos.x + 1*buttonWidth + margin, pos.y, pos.x + 2*buttonWidth, pos.y + labelHeight),
-		"Info"%t, "onInfoButton")
+		"Update"%t, "onCurrentUpdateButton")
 	button = window:createButton(
 		Rect(pos.x + 2*buttonWidth + margin, pos.y, pos.x + 3*buttonWidth, pos.y + labelHeight),
 		"Clear"%t, "onClearButton")
@@ -321,6 +321,7 @@ function onShowWindow()
 		-- installSystems(systemList) -- reinstall current
 	else
 		invokeServerFunction("sendEntityScriptList", Player().index, "checkActiveList")
+		updateInfoText()
 	end
 end
 
@@ -478,10 +479,17 @@ function onClearButton()
 	isNeedRefresh = true
 end
 
-function onInfoButton()
+function onCurrentUpdateButton()
 	if isInputCooldown then return end -- blocks user input
-	updateInfoText()
+	log(LogType.Debug, "onCurrentUpdateButton")
+	-- clever update system list
+	if not isCleverUpdateIsRunning then
+		invokeServerFunction("sendEntityScriptList", Player().index, "cleverUpdateSystems", nil, "onShowWindow")
+	else
+		sendChatMessage(MessageType.Error, "SystemControl: Wait for the previous update task is done.")
+	end
 end
+
 
 ---- Functions ----
 function checkActiveList(scripts)
@@ -774,6 +782,7 @@ function checkSystemsByTemplate(scripts, templateList) -- client side
 		installFromInventory(installList)
 	else		
 		invokeServerFunction("restore", secure()) -- share state with server
+		updateInfoText()
 		isInputCooldown = false
 		isNeedRefresh = true
 	end
@@ -984,6 +993,7 @@ function installSystems(scriptList, systemList) -- client side
 	end
 	
 	invokeServerFunction("restore", secure()) -- share state with server
+	updateInfoText()
 	isInputCooldown = false
 	isNeedRefresh = true
 	invokeServerFunction("sendEntityScriptList", Player().index, "checkActiveList") -- cheks result
