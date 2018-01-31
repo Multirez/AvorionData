@@ -485,13 +485,15 @@ end
 function onInfoButton()
 	if isInputCooldown then return end -- blocks user input
 	log(LogType.Debug, "onInfoButton")
-	updateInfoText()
-	--[[ -- clever update system list
-	if not isCleverUpdateIsRunning then
-		cleverUpdateSystems(nil, "onShowWindow")
-	else
-		sendChatMessage(MessageType.Error, "SystemControl: Wait for the previous update task is done.")
-	end ]]
+	if dirtySystemCount ~= 0 then -- clever update system list
+		if not isCleverUpdateIsRunning then
+			cleverUpdateSystems(nil, "onShowWindow")
+		else
+			sendChatMessage(MessageType.Error, "SystemControl: Wait for the previous update task is done.")
+		end
+	else		
+		updateInfoText()
+	end
 end
 
 
