@@ -79,6 +79,7 @@ local log = function(level, ...)
 	end
 end
 
+
 ---- API functions ----
 function initialize()
 	log(LogType.Debug, "Init templates to {}")
@@ -234,9 +235,9 @@ function delayedSystemCheck()
 	end
 end
 
+
 ---- UI ----
--- if this function returns false, the script will not be listed in the interaction window on the client,
--- even though its UI may be registered
+-- if this function returns false, the script will not be listed in the interaction window on the client
 function interactionPossible(playerIndex, option)
 	local entity = Entity()
     return entity.index == Player(playerIndex).craftIndex and entity.isShip -- only on ship
@@ -277,7 +278,7 @@ function initUI()
 	label = window:createLabel(pos + vec2(0, padding), "Current"%t, labelFontSize)
 	infoButton = window:createButton(
 		Rect(pos.x + 1*buttonWidth + margin, pos.y, pos.x + 2*buttonWidth, pos.y + labelHeight),
-		"Update"%t, "onCurrentUpdateButton")
+		"Info"%t, "onInfoButton")
 	button = window:createButton(
 		Rect(pos.x + 2*buttonWidth + margin, pos.y, pos.x + 3*buttonWidth, pos.y + labelHeight),
 		"Clear"%t, "onClearButton")
@@ -481,15 +482,16 @@ function onClearButton()
 	isNeedRefresh = true
 end
 
-function onCurrentUpdateButton()
+function onInfoButton()
 	if isInputCooldown then return end -- blocks user input
-	log(LogType.Debug, "onCurrentUpdateButton")
-	-- clever update system list
+	log(LogType.Debug, "onInfoButton")
+	updateInfoText()
+	--[[ -- clever update system list
 	if not isCleverUpdateIsRunning then
 		cleverUpdateSystems(nil, "onShowWindow")
 	else
 		sendChatMessage(MessageType.Error, "SystemControl: Wait for the previous update task is done.")
-	end
+	end ]]
 end
 
 
@@ -998,7 +1000,6 @@ function installSystems(scriptList, systemList) -- client side
 	end
 	
 	invokeServerFunction("restore", secure()) -- share state with server
-	updateInfoText()
 	isInputCooldown = false
 	isNeedRefresh = true
 	invokeServerFunction("sendEntityScriptList", Player().index, "checkActiveList") -- cheks result
@@ -1202,18 +1203,18 @@ function entityBonusesInfo(entity)
 	end
 	for k, v in pairs(statBonuses) do
 		bonus = entity:getBoostedValue(v, minValue) - minValue
-		if bonus and bonus > minDelta then
+		if bonus and (bonus > minDelta or bonus < -minDelta) then
 			multiplier = (entity:getBoostedValue(v, maxValue) - (bonus + maxValue)) / maxValue
 			absolute = bonus - minValue * multiplier
-			if absolute > 0 then
-				absolute = " +"..roundedString(absolute, 0.1)
-			else
+			if absolute < 0 then
 				absolute = " "..roundedString(absolute, 0.1)
-			end
-			if multiplier > 0 then
-				multiplier = " +"..roundedString(multiplier * 100, 0.1).."%"
 			else
+				absolute = " +"..roundedString(absolute, 0.1)
+			end
+			if multiplier < 0 then
 				multiplier = " "..roundedString(multiplier * 100, 0.1).."%"
+			else
+				multiplier = " +"..roundedString(multiplier * 100, 0.1).."%"
 			end			
 			result = result .."\n".. k .. absolute .. multiplier
 		end
