@@ -22,6 +22,36 @@ local slotRequirements = {0, 51, 128, 320, 800, 2000, 5000, 12500, 19764,
 local upgradeSlotCount = nil
 local systemPath = "data/scripts/systems/"
 local dummyPath = "mods/SystemControl/scripts/entity/dummy.lua"
+local statBonuses = { 
+	RadarReach = StatsBonuses.RadarReach,
+	HiddenSectorRadarReach = StatsBonuses.HiddenSectorRadarReach,
+	ScannerReach = StatsBonuses.ScannerReach,
+	HyperspaceReach = StatsBonuses.HyperspaceReach,
+	HyperspaceCooldown = StatsBonuses.HyperspaceCooldown,
+	HyperspaceRechargeEnergy = StatsBonuses.HyperspaceRechargeEnergy,
+	ShieldDurability = StatsBonuses.ShieldDurability,
+	ShieldRecharge = StatsBonuses.ShieldRecharge,
+	Velocity = StatsBonuses.Velocity,
+	Acceleration = StatsBonuses.Acceleration,
+	GeneratedEnergy = StatsBonuses.GeneratedEnergy,
+	EnergyCapacity = StatsBonuses.EnergyCapacity,
+	BatteryRecharge = StatsBonuses.BatteryRecharge,
+	ArbitraryTurrets = StatsBonuses.ArbitraryTurrets,
+	UnarmedTurrets = StatsBonuses.UnarmedTurrets,
+	ArmedTurrets = StatsBonuses.ArmedTurrets,
+	CargoHold = StatsBonuses.CargoHold,
+	Engineers = StatsBonuses.Engineers,
+	Mechanics = StatsBonuses.Mechanics,
+	Gunners = StatsBonuses.Gunners,
+	Miners = StatsBonuses.Miners,
+	Security = StatsBonuses.Security,
+	Attackers = StatsBonuses.Attackers,
+	Sergeants = StatsBonuses.Sergeants,
+	Lieutenants = StatsBonuses.Lieutenants,
+	Commanders = StatsBonuses.Commanders,
+	Generals = StatsBonuses.Generals,
+	Captains = StatsBonuses.Captains
+}
 
 local MaxMessageLength = 500
 -- ChatMessageType.Information on client fires attempt to index a nil value, create own enum
@@ -34,11 +64,12 @@ local mainWindow = nil
 local systemIcons = {}
 local buttonToLine = {}
 local usePlayerInventoryCheckBox = nil
+local infoButton = nil
 
 ---- Log ----
 local LogType = { None=0, Error=1, Warning=2, Info=4, Debug=8, All=255 }
 local logPrefix = { [1]="(error)", [2]="(warning)", [4]="(info)", [8]="(debug)"}
-local logLevel = LogType.Warning -- sets current log level
+local logLevel = LogType.Debug -- sets current log level
 local logSource = "SystemControl:"
 local log = function(level, ...)
 	if logPrefix[level] and logLevel >= level then
@@ -220,7 +251,7 @@ function initUI()
 
     local menu = ScriptUI()
     mainWindow = menu:createWindow(Rect(res * 0.5 - size * 0.5, res * 0.5 + size * 0.5))
-    menu:registerWindow(mainWindow, "System control"%_t)
+    menu:registerWindow(mainWindow, "System controlR"%_t)
 	
     mainWindow.caption = "System control"%_t
     mainWindow.showCloseButton = 1
@@ -242,11 +273,14 @@ function initUI()
 	--chatMessage(tableInfo(getTempList()))
 		
 	label = window:createLabel(pos + vec2(0, padding), "Current"%t, labelFontSize)
+	infoButton = window:createButton(
+		Rect(pos.x + 1*buttonWidth + margin, pos.y, pos.x + 2*buttonWidth, pos.y + labelHeight),
+		"Info"%t, "onInfoButton")
 	button = window:createButton(
-		Rect(pos.x + buttonWidth + margin, pos.y, pos.x + 2*buttonWidth, pos.y + labelHeight),
+		Rect(pos.x + 2*buttonWidth + margin, pos.y, pos.x + 3*buttonWidth, pos.y + labelHeight),
 		"Clear"%t, "onClearButton")
 	usePlayerInventoryCheckBox = window:createCheckBox(
-		Rect(pos.x + 2*buttonWidth + margin, pos.y + padding, pos.x + 4*buttonWidth, pos.y + labelHeight),
+		Rect(pos.x + 3*buttonWidth + margin, pos.y + padding, pos.x + 5*buttonWidth, pos.y + labelHeight),
 		"Use player inventory:"%t, "onUsePlayerInventory")
 	usePlayerInventoryCheckBox.checked = usePlayerInventory
 	pos.y = pos.y + labelHeight
@@ -368,6 +402,10 @@ function updateUISystemList(iconList, systemList, availableTotal)
 	end
 end
 
+function updateInfoText()
+	infoButton.tooltip = "Current bonuses:"%t .. entityBonusesInfo(Entity())
+end
+
 function updateUI() 	
 	if isNeedRefresh then refreshUI() end
 end
@@ -440,6 +478,10 @@ function onClearButton()
 	isNeedRefresh = true
 end
 
+function onInfoButton()
+	if isInputCooldown then return end -- blocks user input
+	updateInfoText()
+end
 
 ---- Functions ----
 function checkActiveList(scripts)
@@ -1129,6 +1171,38 @@ function systemListInfo(systemList)
 				"scriptKey:", k)
 		end
 	end	
+	return result
+end
+
+-- Returns string with current entity bonuses
+function entityBonusesInfo(entity)
+	local result = ""
+	local bonus, absolute, multiplier = nil, nil, nil
+	local minValue, maxValue = 0.01, 1000
+	local minDelta = minValue * 0.001 --  0.1% from minValue
+	local roundedString = function(v, step)
+	    step = step or 1
+	    assert(step > 0, "Invalid round step, step must be > 0.")
+	    return tostring(math.floor((v + step/2) / step ) * step)
+	end
+	for k, v in pairs(statBonuses) do
+		bonus = entity:getBoostedValue(v, minValue) - minValue
+		if bonus and bonus > minDelta then
+			multiplier = (entity:getBoostedValue(v, maxValue) - (bonus + maxValue)) / maxValue
+			absolute = bonus - minValue * multiplier
+			if absolute > 0 then
+				absolute = " +"..roundedString(absolute, 0.1)
+			else
+				absolute = " "..roundedString(absolute, 0.1)
+			end
+			if multiplier > 0 then
+				multiplier = " +"..roundedString(multiplier * 100, 0.1).."%"
+			else
+				multiplier = " "..roundedString(multiplier * 100, 0.1).."%"
+			end			
+			result = result .."\n".. k .. absolute .. multiplier
+		end
+	end
 	return result
 end
 
